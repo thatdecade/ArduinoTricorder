@@ -11,28 +11,28 @@
    
    List of Parts:
     - main_body() - Housing for most of the circuits and battery
-    - screen_face_body() - Friction fits into main body. Housing for the LCD and most buttons / lights
+    - control_panel_face_body() - Friction fits into main body. Housing for the LCD and most buttons / lights
     
     - lid_body() - Housing for closable lid
     - id_lid_face() - Friction fits into lid body. Housing for closable lid, contains two LEDs
     
-    - body_hinge() - Glues onto screen_face_body. Contains hinge assembly and wire routes.
+    - body_hinge() - Glues onto control_panel_face_body. Contains hinge assembly and wire routes.
     - lid_hinge() - Glues onto id_lid_face. Contains hinge assembly and wire routes.
     
     - EMRG_insert() - Holder for EMRG LED
     
     - front_sensor_panel() - Friction fits into front of main body. Contains sensor outlines and screw holes.
     
-    - button_diffusers() - Friction fits into screen_face_body
-    - LED_diffusers() - Friction fits into screen_face_body
+    - button_diffusers() - Friction fits into control_panel_face_body
+    - LED_diffusers() - Friction fits into control_panel_face_body
     
     TBD: Power switch assembly
    
 */
 
 include <roundedcube.scad>; // https://danielupshaw.com/openscad-rounded-corners/
-include <led_sequin.scad>;
-include <button_pcb.scad>;
+include <Adafruit LED Sequin.scad>;
+include <ButtonPCB.scad>;
 
 friction_fit = 0.02;
 sliding_fit  = 0.2;
@@ -74,7 +74,7 @@ module cover_cutout(face="lower")
         if(face=="upper") translate([-0.1,7.6+wall_thickness*2/3,0]) rotate([90,0,0]) cube([90,56,40]);
     }
     
-    translate([-0.1,55.84,24.17]) rotate([45,0,0]) cube([90,56,20]);
+    translate([-0.1,55.84-0.07,24.17+0.007]) rotate([45,0,0]) cube([90,56,20]);
     if(face=="lower") translate([-0.1,0,0]) rotate([71.5,0,0]) cube([90,56,40]);
 }
 
@@ -101,6 +101,8 @@ module main_body()
     }
     
     //TBD - Battery protective sleeve
+    
+    //TBD - retension brackets (so button presses don't push the cp out of position
 }
 
 module lid_body()
@@ -206,7 +208,7 @@ module horizontal_button_pcb_holder(show_pcb=false)
    }
 }
 
-module screen_face_body()
+module control_panel_face_body()
 {
     difference()
     {
@@ -230,6 +232,25 @@ module screen_face_body()
     horizontal_button_pcb_holder(show_pcb=false);
 }
 
+module upper_control_panel_face_body()
+{
+    translate([0,0,0.01])
+    difference()
+    {
+        control_panel_face_body();
+        cube([100,100,24.18]);
+    }
+}
+
+module lower_control_panel_face_body()
+{
+    difference()
+    {
+        control_panel_face_body();
+        translate([0,0,24.18]) cube([100,100,24.18]);
+    }
+}
+
 module id_lid_face()
 {
     difference()
@@ -247,7 +268,8 @@ module id_lid_face()
     }
 }
 
-//main_body();
-screen_face_body();
+main_body();
+upper_control_panel_face_body();
+lower_control_panel_face_body();
 //id_lid_face();
 //lid_body();
