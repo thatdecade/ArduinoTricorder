@@ -262,19 +262,31 @@ module horizontal_button_windows()
     
 }
 
+module screw_post(length=7)
+{
+    //hot insert threads are d=3.9, h=6
+    //screws are d=3.75, h=7.5
+    if(length < (7.5 - 1.6)) echo("WARNING: check screw post length");
+    
+    difference()
+    {
+        cylinder(d=3.9+wall_thickness, h=length, center=true);
+        cylinder(d=3.9, h=length+0.01, center=true);
+    }
+}
+
 module horizontal_button_pcb_holder(show_pcb=false)
 {
    if(show_pcb) translate([44,17,12.5]) rotate([5.2,0,0]) color("blue") button_pcb();
-       
-   translate([45,17,12.5]) rotate([5.2,0,0]) 
-   difference()
-   {
-       translate([0,-9.6,0.5])
-       rotate([-90+71.5-5,0,0]) 
-       roundedcube_simple([40,wall_thickness*2,1.6+wall_thickness*2],true,0.5);
-       
-       button_pcb();
-   }
+      
+    //screw mounts in between the LEDs
+    translate([44,17,12.5+3.5]) rotate([5.2,0,0])
+    translate([-41.91/2,-21.59/2,0])
+    translate([0,0,1.6-0.55])
+    {
+        translate([16.0655, 14,0]) screw_post();
+        translate([29.083, 14,0]) screw_post();
+    }
 }
 
 module control_panel_face_body()
