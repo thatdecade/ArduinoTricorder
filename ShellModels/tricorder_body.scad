@@ -8,9 +8,31 @@
    
    Note: don't worry about minor details like chamfers here.  Add later with FreeCAD.
    reddit.com/r/openscad/comments/lrcby9/minkowski_without_size_increase_cube_with_rounded/
+   
+   List of Parts:
+    - main_body() - Housing for most of the circuits and battery
+    - screen_face_body() - Friction fits into main body. Housing for the LCD and most buttons / lights
+    
+    - lid_body() - Housing for closable lid
+    - id_lid_face() - Friction fits into lid body. Housing for closable lid, contains two LEDs
+    
+    - body_hinge() - Glues onto screen_face_body. Contains hinge assembly and wire routes.
+    - lid_hinge() - Glues onto id_lid_face. Contains hinge assembly and wire routes.
+    
+    - EMRG_insert() - Holder for EMRG LED
+    
+    - front_sensor_panel() - Friction fits into front of main body. Contains sensor outlines and screw holes.
+    
+    - button_diffusers() - Friction fits into screen_face_body
+    - LED_diffusers() - Friction fits into screen_face_body
+    
+    TBD: Power switch assembly
+   
 */
 
 include <roundedcube.scad>; // https://danielupshaw.com/openscad-rounded-corners/
+include <led_sequin.scad>;
+include <button_pcb.scad>;
 
 friction_fit = 0.02;
 sliding_fit  = 0.2;
@@ -77,6 +99,8 @@ module main_body()
         cover_cutout();
         body_inner_wall();
     }
+    
+    //TBD - Battery protective sleeve
 }
 
 module lid_body()
@@ -103,6 +127,85 @@ module lcd_cutout()
     }
 }
 
+module vertical_leds(type="windows")
+{
+    spacing = 8;
+    
+    if (type=="windows")
+    {
+        //sequin inserts
+        translate([14.5,30,19.5]) 
+        rotate([5.2,0,0]) 
+        {
+            translate([0,spacing*0,0]) led_sequin();  //ALPHA
+            translate([0,spacing*1,0]) led_sequin(); //BETA
+            translate([0,spacing*2,0]) led_sequin(); //GAMMA
+            translate([0,spacing*3,0]) led_sequin(); //DELTA
+            
+            translate([0,spacing*4+2.8,6.5]) 
+            rotate([45-5,0,0]) led_sequin(); //PWR
+        }
+    }
+        
+    if (type=="windows")
+    {
+        //windows
+        translate([14.55,29.1,19.5]) 
+        rotate([5.2,0,0]) 
+        {
+            translate([0,spacing*0,0]) cube([8.1,3.2,5], center=true);  //ALPHA
+            translate([0,spacing*1,0]) cube([8.1,3.2,5], center=true); //BETA
+            translate([0,spacing*2,0]) cube([8.1,3.2,5], center=true); //GAMMA
+            translate([0,spacing*3,0]) cube([8.1,3.2,5], center=true); //DELTA
+            
+            translate([0,spacing*4+2.8,6.5]) 
+            rotate([45-5,0,0]) cube([8.1,3.2,5], center=true); //PWR
+        }
+    }
+    
+    
+    if (type=="shield")
+    {
+        translate([14.5,26,19]) 
+        rotate([5.2,0,0]) 
+        {
+            translate([0,spacing*0,0]) cube([15,wall_thickness,3], center=true);
+            translate([0,spacing*1,0]) cube([15,wall_thickness,3], center=true);
+            translate([0,spacing*2,0]) cube([15,wall_thickness,3], center=true);
+            translate([0,spacing*3,0]) cube([15,wall_thickness,3], center=true);
+        }
+    }
+}
+
+module horizontal_button_windows()
+{
+    spacing = 12.8;
+    translate([32.8,14,20])
+    rotate([5.2,0,0]) 
+    {
+        //Horizontal Edge Lit Buttons): GEO, MET, BIO
+        translate([spacing*0, 0,0]) cube([7,3,4.57], center=true);
+        translate([spacing*1,0,0]) cube([7,3,4.57], center=true);
+        translate([spacing*2, 0,0]) cube([7,3,4.57], center=true);
+    }
+    
+}
+
+module horizontal_button_pcb_holder(show_pcb=false)
+{
+   if(show_pcb) translate([44,17,12.5]) rotate([5.2,0,0]) color("blue") button_pcb();
+       
+   translate([45,17,12.5]) rotate([5.2,0,0]) 
+   difference()
+   {
+       translate([0,-9.5,0.5])
+       rotate([-90+71.5-5,0,0]) 
+       cube([40,wall_thickness*2,1.6+wall_thickness*2],center=true);
+       
+       button_pcb();
+   }
+}
+
 module screen_face_body()
 {
     difference()
@@ -113,14 +216,18 @@ module screen_face_body()
         
         translate([0,0,-wall_thickness]) body_cutout(face="lower");
         
+        vertical_leds(type="windows");
+        horizontal_button_windows();
+        
         //TBDs
         //sticker outline
-        //Vertical LEDs: PWR, ALPHA, BETA, GAMMA, DELTA
         //Scroll wheel
-        //Horizontal Edge Lit Buttons): GEO, MET, BIO
         //pin coupler
-        //button pcb holder
     }
+    
+    //LED Light Shield
+    vertical_leds(type="shield");
+    horizontal_button_pcb_holder(show_pcb=false);
 }
 
 module id_lid_face()
@@ -140,7 +247,7 @@ module id_lid_face()
     }
 }
 
-main_body();
+//main_body();
 screen_face_body();
 //id_lid_face();
 //lid_body();
