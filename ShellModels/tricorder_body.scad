@@ -43,12 +43,49 @@ wall_thickness = 2;
 outer_x = 80;
 outer_y = 84.11;
 outer_z = 39.9;
+outer_r = 10;
 
 $fn=25; //crank up for final render
 
+/* ******************************* */
+
+//main_body(); //Note: print with a brim
+upper_control_panel_face_body();
+lower_control_panel_face_body();
+//id_lid_face();
+//lid_body();
+
+/* ******************************* */
+
+/* ******************************* */
+
+module roundedcube_simple(size = [1, 1, 1], center = false, radius = 0.5) {
+// More information: https://danielupshaw.com/openscad-rounded-corners/
+	// If single value, convert to [x, y, z] vector
+	size = (size[0] == undef) ? [size, size, size] : size;
+
+	translate = (center == false) ?
+		[radius, radius, radius] :
+		[
+			radius - (size[0] / 2),
+			radius - (size[1] / 2),
+			radius - (size[2] / 2)
+	];
+
+	translate(v = translate)
+	minkowski() {
+		cube(size = [
+			size[0] - (radius * 2),
+			size[1] - (radius * 2),
+			size[2] - (radius * 2)
+		]);
+		sphere(r = radius);
+	}
+}
+
 module outer_body()
 {
-    roundedcube([outer_x, outer_y, outer_z], false, 10, "y");
+    roundedcube([outer_x, outer_y, outer_z], false, outer_r, "y");
     //cube([80, 84.11, 39.9], false);;
 }
 
@@ -102,7 +139,37 @@ module main_body()
     
     //TBD - Battery protective sleeve
     
-    //TBD - retension brackets (so button presses don't push the cp out of position
+    //draw_retension_brackets
+    //Prevent button presses from breaking the glue on the control panel
+    faceplate_wall_thickness = 1.6; //measured
+    //front left
+    translate([wall_thickness,4.80+faceplate_wall_thickness,outer_r+1]) rotate([71.5,0,0]) 
+    roundedcube_simple([2,10,2], true, 0.9);
+    //front right
+    translate([outer_x-wall_thickness,4.80+faceplate_wall_thickness,outer_r+1]) rotate([71.5,0,0]) 
+    roundedcube_simple([2,10,2], true, 0.9);
+    
+    //top left
+    translate([wall_thickness,30,19.1+1.72-faceplate_wall_thickness]) rotate([-5.2,0,0]) rotate([5.2,0,0]) rotate([5.2,0,0]) 
+    roundedcube_simple([2,30,2], true, 0.9);
+    //top right
+    translate([outer_x-wall_thickness,30,19.1+1.72-faceplate_wall_thickness]) rotate([-5.2,0,0]) rotate([5.2,0,0]) rotate([5.2,0,0]) 
+    roundedcube_simple([2,30,2], true, 0.9);
+    
+    //lower front
+    translate([outer_x/2,wall_thickness-0.1+faceplate_wall_thickness,wall_thickness]) 
+    roundedcube_simple([30,2,2], true, 0.9);
+    
+    //upper top
+    translate([outer_x/2,outer_y-13.60+faceplate_wall_thickness,outer_z-wall_thickness]) 
+    roundedcube_simple([30,2,2], true, 0.9);
+    //upper left
+    translate([wall_thickness,outer_y-23.2+faceplate_wall_thickness,outer_z-12]) rotate([45,0,0]) 
+    roundedcube_simple([2,10,2], true, 0.9);
+    //upper right
+    translate([outer_x-wall_thickness,outer_y-23.2+faceplate_wall_thickness,outer_z-12]) rotate([45,0,0]) 
+    roundedcube_simple([2,10,2], true, 0.9);
+
 }
 
 module lid_body()
@@ -113,6 +180,8 @@ module lid_body()
         body_cutout();
         body_inner_wall();
     }
+    
+    //TBD - retension brackets (so button presses don't push the cp out of position
 }
 
 module lcd_cutout()
@@ -171,10 +240,10 @@ module vertical_leds(type="windows")
         translate([14.5,26,19]) 
         rotate([5.2,0,0]) 
         {
-            translate([0,spacing*0,0]) cube([15,wall_thickness,3], center=true);
-            translate([0,spacing*1,0]) cube([15,wall_thickness,3], center=true);
-            translate([0,spacing*2,0]) cube([15,wall_thickness,3], center=true);
-            translate([0,spacing*3,0]) cube([15,wall_thickness,3], center=true);
+            translate([0,spacing*0,0]) roundedcube_simple([15,wall_thickness,3], true, 0.9);
+            translate([0,spacing*1,0]) roundedcube_simple([15,wall_thickness,3], true, 0.9);
+            translate([0,spacing*2,0]) roundedcube_simple([15,wall_thickness,3], true, 0.9);
+            translate([0,spacing*3,0]) roundedcube_simple([15,wall_thickness,3], true, 0.9);
         }
     }
 }
@@ -200,9 +269,9 @@ module horizontal_button_pcb_holder(show_pcb=false)
    translate([45,17,12.5]) rotate([5.2,0,0]) 
    difference()
    {
-       translate([0,-9.5,0.5])
+       translate([0,-9.6,0.5])
        rotate([-90+71.5-5,0,0]) 
-       cube([40,wall_thickness*2,1.6+wall_thickness*2],center=true);
+       roundedcube_simple([40,wall_thickness*2,1.6+wall_thickness*2],true,0.5);
        
        button_pcb();
    }
@@ -225,6 +294,7 @@ module control_panel_face_body()
         //sticker outline
         //Scroll wheel
         //pin coupler
+        //wire route to cover
     }
     
     //LED Light Shield
@@ -265,11 +335,6 @@ module id_lid_face()
         //sticker outline
         //EMRG LED
         //ID LED
+        //wire route to control panel
     }
 }
-
-main_body();
-upper_control_panel_face_body();
-lower_control_panel_face_body();
-//id_lid_face();
-//lid_body();
