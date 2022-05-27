@@ -7,25 +7,36 @@ margin_for_error = 0.2;
 module button_pcb()
 {
     scale(1.01)
-    translate([-41.91/2,-21.59/2,0])
+    difference()
     {
-        //OUTLINE
-        linear_extrude(height = 1.6, center = true, convexity = 10) import("ButtonPCB.dxf");
+        translate([-41.91/2,-21.59/2,0])
+        {
+            //OUTLINE
+            linear_extrude(height = 1.6, center = true, convexity = 10) import("ButtonPCB.dxf");
 
+            translate([0,0,1.6-0.55])
+            {
+            //LEDs
+            translate([9.525, 14.986,0]) button_side_led();
+            translate([22.606,14.986,0]) button_side_led();
+            translate([35.56, 14.986,0]) button_side_led();
+
+            //BUTTONS
+            translate([9.398, 8.382,0]) button_button();
+            translate([22.479,8.382,0]) button_button();
+            translate([35.56, 8.382,0]) button_button();
+
+            //WIRES
+            translate([39.37,20.32,0]) button_spaced_wire_connector();
+            }
+        }
+        
+        //screw holes
+        translate([-41.91/2,-21.59/2,0])
         translate([0,0,1.6-0.55])
         {
-        //LEDs
-        translate([9.525, 14.986,0]) button_side_led();
-        translate([22.606,14.986,0]) button_side_led();
-        translate([35.56, 14.986,0]) button_side_led();
-
-        //BUTTONS
-        translate([9.398, 8.382,0]) button_button();
-        translate([22.479,8.382,0]) button_button();
-        translate([35.56, 8.382,0]) button_button();
-
-        //WIRES
-        translate([39.37,20.32,0]) button_spaced_wire_connector();
+            translate([16.0655, 14,0]) cylinder(d=3.75, h=4, center=true);
+            translate([29.083, 14,0]) cylinder(d=3.75, h=4, center=true);
         }
     }
 }

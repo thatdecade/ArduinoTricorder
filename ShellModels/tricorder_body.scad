@@ -3,6 +3,13 @@
 
    Dustin Westaby 
    
+   Screen size from 75% scale replica measurement:
+   - Note: lcd has rounded corners
+   - body width = 60 -> 80mm
+   - lcd width = 27.6 -> 36.8
+   Conclusion: The adafruit 5206 is a close fit.
+   - Has a round screen! 38x30mm, Res = 280x240
+   
    Ideally, orient on the print bed for color changes.
    See Lower Decks' Purple Stripe Tricorder, lol
    
@@ -33,6 +40,7 @@
 include <roundedcube.scad>; // https://danielupshaw.com/openscad-rounded-corners/
 include <Adafruit LED Sequin.scad>;
 include <ButtonPCB.scad>;
+include <Adafruit 1.69in 280x240 Round Rectangle TFT.scad>;
 
 friction_fit = 0.02;
 sliding_fit  = 0.2;
@@ -50,10 +58,12 @@ $fn=25; //crank up for final render
 /* ******************************* */
 
 //main_body(); //Note: print with a brim
-upper_control_panel_face_body();
+//upper_control_panel_face_body();
 lower_control_panel_face_body();
 //id_lid_face();
 //lid_body();
+
+draw_lcd_bezel();
 
 /* ******************************* */
 
@@ -81,6 +91,32 @@ module roundedcube_simple(size = [1, 1, 1], center = false, radius = 0.5) {
 		]);
 		sphere(r = radius);
 	}
+}
+
+/* ******************************* */
+
+module draw_lcd_bezel(fitment=0, cutout=false)
+{
+    lcd_bezel_x = 1.73 * 25.4 + fitment*2;
+    lcd_bezel_y = 1.45 * 25.4 + fitment*2;
+    
+    difference()
+    {
+        //color("black")
+        translate([50.75,37,18+wall_thickness-1]) rotate([5.2,0,0]) 
+        difference()
+        {
+            translate([0,0,wall_thickness*2-0.4])
+            cube([lcd_bezel_x, lcd_bezel_y, wall_thickness], center=true);
+            
+            if(cutout==false) rotate([0,0,90]) display_pcb();
+            
+            //TBD, overlay the upper cp too
+        }
+    
+        translate([0,-0.05,0.05])
+        upper_control_panel_face_body();
+    }
 }
 
 module outer_body()
@@ -186,16 +222,16 @@ module lid_body()
 
 module lcd_cutout()
 {
-    lcd_view_x = 1.61 * 25.4 + sliding_fit;
-    lcd_view_y = 1.15 * 25.4 + sliding_fit;
-    lcd_bezel_x = 1.73 * 25.4 + sliding_fit;
-    lcd_bezel_y = 1.26 * 25.4 + sliding_fit;
-    
-    translate([50.75,39,18+wall_thickness]) rotate([5.2,0,0]) 
+    translate([50.75,37+0.4,15]) rotate([5.2,0,0]) scale([1,1,2])
     {
-        cube([lcd_view_x, lcd_view_y, wall_thickness*3], center=true);
-        cube([lcd_bezel_x, lcd_bezel_y, wall_thickness*2], center=true);
+        rotate([0,0,90]) scale([1,1,2]) display_pcb();
     }
+    
+        translate([50.75,37,18+wall_thickness-1]) rotate([5.2,0,0]) 
+            translate([0,0,wall_thickness*2-0.4])
+    
+    translate([0,0,-0.1])
+    draw_lcd_bezel(fitment=sliding_fit, cutout=true);
 }
 
 module vertical_leds(type="windows")
@@ -284,18 +320,17 @@ module horizontal_button_pcb_holder(show_pcb=false)
     translate([-41.91/2,-21.59/2,0])
     translate([0,0,1.6-0.55])
     {
-        translate([16.0655, 14,0]) screw_post();
-        translate([29.083, 14,0]) screw_post();
+        translate([16.0655, 11,0]) screw_post();
+        translate([29.083, 11,0]) screw_post();
     }
 }
 
-module control_panel_face_body()
+module control_panel_face_body(cut_only=false)
 {
     difference()
     {
         body_inner_face();
         cover_cutout();
-        lcd_cutout();
         
         translate([0,0,-wall_thickness]) body_cutout(face="lower");
         
@@ -324,12 +359,14 @@ module upper_control_panel_face_body()
     }
 }
 
-module lower_control_panel_face_body()
+module lower_control_panel_face_body(cut_only=false)
 {
     difference()
     {
         control_panel_face_body();
         translate([0,0,24.18]) cube([100,100,24.18]);
+        
+        if(cut_only==false) lcd_cutout();
     }
 }
 
