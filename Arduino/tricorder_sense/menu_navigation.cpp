@@ -52,12 +52,12 @@ void process_menu_selection()
         if(last_mode_button_state[i] == NOT_PROCESSED)
         {
             //one action per press / hold
-					  for( byte j = 0; i < NUMBER_OF_BUTTONS; i++)
-					  {
-	            last_mode_button_state[i] = PROCESSED;
-	          }
-	          
-          	button_clicked(i);
+            for( byte j = 0; i < NUMBER_OF_BUTTONS; i++)
+            {
+              last_mode_button_state[i] = PROCESSED;
+            }
+            
+            button_clicked(i);
         }
     }
     else if ( ( current_button_state == IS_HELD ) &&
@@ -70,21 +70,21 @@ void process_menu_selection()
         if(last_mode_button_state[i] == NOT_PROCESSED)
         {
             //one action per press / hold
-					  for( byte j = 0; i < NUMBER_OF_BUTTONS; i++)
-					  {
-	            last_mode_button_state[i] = PROCESSED;
-	          }
+            for( byte j = 0; i < NUMBER_OF_BUTTONS; i++)
+            {
+              last_mode_button_state[i] = PROCESSED;
+            }
 
             if( (get_button_state(MET_BUTTON) == IS_HELD) &&
                 (get_button_state(BIO_BUTTON) == IS_HELD) )
             {
-  							set_software_state(HIDDEN_TOM_SERVO_SCREEN);
+                set_software_state(HIDDEN_TOM_SERVO_SCREEN);
                 break;
             }
             else
-          	{
-          		button_held(i);
-          	}
+            {
+              button_held(i);
+            }
         }
     }
     else if (current_button_state == IS_NOT_PRESSED)
@@ -103,20 +103,20 @@ void button_clicked(byte button)
   // call clicked action handler
   switch(button)
   {
-  	case GEO_BUTTON:
+    case GEO_BUTTON:
       process_left_click();
-  		break;
-  	case MET_BUTTON:
+      break;
+    case MET_BUTTON:
       process_center_click();
-  		break;
-  	case BIO_BUTTON:
+      break;
+    case BIO_BUTTON:
       process_right_click();
-  		break;
-  	case CAM_BUTTON:
+      break;
+    case CAM_BUTTON:
       process_camera_click();
-  		break;
-  	default:
-  		break; //do nothing
+      break;
+    default:
+      break; //do nothing
   }
 }
 
@@ -125,20 +125,20 @@ void button_held(byte button)
   // call clicked action handler
   switch(button)
   {
-  	case GEO_BUTTON:
+    case GEO_BUTTON:
       process_left_hold();
-  		break;
-  	case MET_BUTTON:
+      break;
+    case MET_BUTTON:
       process_center_hold();
-  		break;
-  	case BIO_BUTTON:
+      break;
+    case BIO_BUTTON:
       process_right_hold();
-  		break;
-  	case CAM_BUTTON:
+      break;
+    case CAM_BUTTON:
       process_camera_hold();
-  		break;
-  	default:
-  		break; //do nothing
+      break;
+    default:
+      break; //do nothing
   }
 }
 
@@ -146,22 +146,22 @@ void process_left_click()
 {
 #define MENU_HIGH_WRAP_AROUND MAIN_SCREEN
 #define MENU_LOW_WRAP_AROUND  BATTERY_SCREEN
-	if(software_state >= MENU_HIGH_WRAP_AROUND)
-	{
-		//menu_navigation_back
-		set_software_state(software_state - 1);
-	}
-	//else, do nothing
+  if(software_state >= MENU_HIGH_WRAP_AROUND)
+  {
+    //menu_navigation_back
+    set_software_state(software_state - 1);
+  }
+  //else, do nothing
 }
 
 void process_right_click()
 {
-	if(software_state <= MENU_LOW_WRAP_AROUND)
-	{
-		//menu_navigation_forward
-	  set_software_state(software_state + 1);
-	}
-	//else, do nothing
+  if(software_state <= MENU_LOW_WRAP_AROUND)
+  {
+    //menu_navigation_forward
+    set_software_state(software_state + 1);
+  }
+  //else, do nothing
 }
 
 void process_center_click()
@@ -202,8 +202,8 @@ void process_left_hold()
 
 void process_center_hold()
 {
-	//go home
-	set_software_state(MAIN_SCREEN);
+  //go home
+  set_software_state(MAIN_SCREEN);
 }
 
 void process_right_hold()
@@ -236,7 +236,7 @@ void set_software_state(uint8_t new_state)
 {
   software_state = new_state;
 
-	//handle warp around
+  //handle warp around
   switch (software_state)
   {
     case MENU_SCREEN_WRAP_LOW:
@@ -253,5 +253,5 @@ void set_software_state(uint8_t new_state)
 
 uint8_t get_software_state()
 {
-	return software_state;
+  return software_state;
 }

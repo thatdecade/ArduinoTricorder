@@ -24,71 +24,64 @@
 #include "Fonts/lcars15pt7b.h"
 #include "Fonts/lcars11pt7b.h"
 
-
-//prototypes
-void poll_input_switches();
-void enable_input_switches();
-void disable_input_switches();
-void process_menu_selection();
-void set_software_state(uint8_t new_state);
-uint8_t get_software_state();
-
 // For the breakout board, you can use any 2 or 3 pins.
 // These pins will also work for the 1.8" TFT shield.
 //need to use pin 6 for TFT_CS, as pin 20 is analog 7. analog 7 is the only way to get current voltage, which is used for battery %
 
 //MISO is not required for screen to work - this is used by mem card only?
-#define TFT_CS            (6)
+#define TFT_CS                (6)
 // SD card select pin
 //#define SD_CS       11  //- can't use pin 4 as that is for blue connection led
-#define TFT_RST           -1
-#define TFT_DC            (5)
-#define USE_SD_CARD         (0)
+#define TFT_RST               -1
+#define TFT_DC                (5)
+#define USE_SD_CARD           (0)
 
 //pin 9 is free, as pin_a6 is for vbat and is otherwise known as digital 20
-#define VOLT_PIN          PIN_A6    //INPUT_POWER_PIN
+#define VOLT_PIN              PIN_A6    //INPUT_POWER_PIN
 #define SOUND_TRIGGER_PIN     (9)
 
 //buttons, scroller - d2 pin supposed to be pin #2
 //button on the board is connected to pin 7.  TX is pin 0, RX is pin 1 - these are normally used for serial communication
 
-#define BUTTON_1_PIN        (1) //PIN_SERIAL1_RX - GEO
-#define BUTTON_2_PIN        (0) //PIN_SERIAL1_TX - MET
+#define BUTTON_1_PIN          (1) //PIN_SERIAL1_RX - GEO
+#define BUTTON_2_PIN          (0) //PIN_SERIAL1_TX - MET
 //adafruit defines physically labeled pin D2 as pin 2 in its header file, but it does not respond when set as an input by default.
 //you will need to modify system_nrf52840.c file by adding
 //#define CONFIG_NFCT_PINS_AS_GPIOS (1)
 //YOU WILL SEE THIS CONSTANT REFERENCED IN THAT FILE, with compiler-conditional logic around it to actually free up the NFC pins, but only if that constant exists in that file
-#define BUTTON_3_PIN        (2) //BIO
+#define BUTTON_3_PIN          (2) //BIO
 
 //pin 7 is the board button
-#define BUTTON_BOARD        (7) //PIN_BUTTON1 - CAMERA
+#define BUTTON_BOARD          (7) //PIN_BUTTON1 - CAMERA
 //only need 1 pin for potentiometer / scroller input. both poles need to be wired to GND and 3v - order doesn't matter
 #define PIN_SCROLL_INPUT      PIN_A0
 
-#define SCAN_LED_PIN_1      PIN_A2
-#define SCAN_LED_PIN_2      PIN_A3
-#define SCAN_LED_PIN_3      PIN_A4
-#define SCAN_LED_PIN_4      PIN_A5
+#define SCAN_LED_PIN_1        PIN_A2
+#define SCAN_LED_PIN_2        PIN_A3
+#define SCAN_LED_PIN_3        PIN_A4
+#define SCAN_LED_PIN_4        PIN_A5
 
 #define SCAN_LED_BRIGHTNESS   (32)
 
 //neopixel power LED. must use an unreserved pin for this.  PWR, ID, EMRG all use this pin
-#define NEOPIXEL_CHAIN_DATAPIN    (10)
+#define NEOPIXEL_CHAIN_DATAPIN  (10)
 #define NEOPIXEL_BRIGHTNESS     (64)
-#define NEOPIXEL_LED_COUNT      (6)
+#define NEOPIXEL_LED_COUNT       (6)
 // built-in pins: D4 = blue conn LED, 8 = neopixel on board, D13 = red LED next to micro usb port
 // commented out lines are pre-defined by the adafruit board firmware
-#define NEOPIXEL_BOARD_LED_PIN    (8)
-//#define PIN_NEOPIXEL        8
-//#define BOARD_REDLED_PIN      13
-//#define BOARD_BLUELED_PIN     4
-//#define LED_RED           13
-//#define LED_BLUE          4
+#define NEOPIXEL_BOARD_LED_PIN   (8)
+//#define PIN_NEOPIXEL         8
+//#define BOARD_REDLED_PIN    13
+//#define BOARD_BLUELED_PIN    4
+//#define LED_RED             13
+//#define LED_BLUE             4
 
 //system os version #. max 3 digits
 #define DEVICE_VERSION      "0.94"
+
 //theme definition: 0 = TNG, 1 = DS9, 2 = VOY
-#define UX_THEME  (0)
+#define UX_THEME                  (0)
+
 #define THERMAL_CAMERA_PORTRAIT   (1)
 
 //uncomment this line to have raw magnetometer z value displayed on home screen
@@ -101,51 +94,50 @@ int mnMagnetSleepThreshold = -28000;
 #if UX_THEME == 0
   // TNG colors here
   #define color_SWOOP       0xF7B3
-  #define color_MAINTEXT      0x9E7F
-  //#define color_MAINTEXT      0xC69F
-  #define color_LABELTEXT     0x841E
+  #define color_MAINTEXT    0x9E7F
+  //#define color_MAINTEXT    0xC69F
+  #define color_LABELTEXT   0x841E
   #define color_HEADER      0xFEC8
-  #define color_TITLETEXT     0xFEC8
+  #define color_TITLETEXT   0xFEC8
   //196,187,145
-  #define color_LABELTEXT2    0xC5D2
+  #define color_LABELTEXT2  0xC5D2
   //204,174,220
-  #define color_LABELTEXT3    0xCD7B
-  #define color_LABELTEXT4    0xEE31
+  #define color_LABELTEXT3  0xCD7B
+  #define color_LABELTEXT4  0xEE31
   #define color_LEGEND      0x6A62
   //210,202,157
-  #define color_FFT       0xDEB5
+  #define color_FFT         0xDEB5
 #elif UX_THEME == 1
   // ds9
-  #define color_SWOOP     0xD4F0
+  #define color_SWOOP       0xD4F0
   #define color_MAINTEXT    0xBD19
   #define color_LABELTEXT   0x7A8D
-  #define color_HEADER    0xECA7
+  #define color_HEADER      0xECA7
   #define color_TITLETEXT   0xC3ED
   //to-do: find fitting options for these to mesh with ds9
   #define color_LABELTEXT2  0xC5D2
-  #define color_LABELTEXT3    0xCD7B
-  #define color_LABELTEXT4    0xEE31
+  #define color_LABELTEXT3  0xCD7B
+  #define color_LABELTEXT4  0xEE31
   #define color_LEGEND      0x6A62
-  #define color_FFT       0xDEB5
+  #define color_FFT         0xDEB5
 #elif UX_THEME == 2
   // voy
   #define color_MAINTEXT    0x9E7F
-  #define color_SWOOP     0x7C34
+  #define color_SWOOP       0x7C34
   #define color_LABELTEXT   0x9CDF
-  #define color_HEADER    0xCB33
+  #define color_HEADER      0xCB33
   #define color_TITLETEXT   0xFFAF
   //to-do: find fitting options for these to mesh with voy
   #define color_LABELTEXT2  0xC5D2
-  #define color_LABELTEXT3    0xCD7B
-  #define color_LABELTEXT4    0xEE31
+  #define color_LABELTEXT3  0xCD7B
+  #define color_LABELTEXT4  0xEE31
   #define color_LEGEND      0x6A62
-  #define color_FFT       0xDEB5
+  #define color_FFT         0xDEB5
 #endif
 
-
-#define color_REDLABELTEXT    0xE000
-#define color_REDDARKLABELTEXT  0x9800
-#define color_REDDATATEXT   0xDEFB
+#define color_REDLABELTEXT     0xE000
+#define color_REDDARKLABELTEXT 0x9800
+#define color_REDDATATEXT      0xDEFB
 
 //use labeltext3 for servo ltpurple
 #define color_SERVOPINK     0xFE18
@@ -170,41 +162,49 @@ int  mnBoardColor = 4;
 bool mbCyclePowerColor = false;
 bool mbCycleBoardColor = false;
 
-//power interval doesn't need to check more than every 30 seconds
-#define POWER_LED_INTERVAL 30000
-#define ID_LED_INTERVAL     1000
-#define EMRG_LED_INTERVAL    110
-
-int mnCurrentProfileRed = 0;
+int mnCurrentProfileRed   = 0;
 int mnCurrentProfileGreen = 0;
-int mnCurrentProfileBlue = 0;
+int mnCurrentProfileBlue  = 0;
 
 String msCurrentProfileName = "";
 
-int mnEMRGMinStrength = 8;
-int mnEMRGMaxStrength = 212;
-int mnEMRGCurrentStrength = 8;
+int mnEMRGMinStrength     =   8;
+int mnEMRGMaxStrength     = 212;
+int mnEMRGCurrentStrength =   8;
 
 bool mbLEDIDSet = false;
 
 unsigned long mnLastUpdatePower = 0;
 unsigned long mnLastUpdateIDLED = 0;
-unsigned long mnLastUpdateEMRG = 0;
+unsigned long mnLastUpdateEMRG  = 0;
 
 bool mbEMRGdirection = false;
 
+
+#define POWER_LED_INTERVAL       30000  //power interval doesn't need to check more than every 30 seconds
+#define ID_LED_INTERVAL           1000
+#define EMRG_LED_INTERVAL          110
+
 #define BOARD_LED_INTERVAL        5000
-#define LEFT_SCANNER_LED_INTERVAL  200
+#define RGB_SCAN_INTERVAL         5000
+#define MIC_READ_INTERVAL         3000
+#define CLIMATE_SCAN_INTERVAL     2000
+#define HOME_UPDATE_INTERVAL      1000
 #define BOARD_RED_LED_INTERVAL     350
 #define BOARD_BLUE_LED_INTERVAL    250
+#define LEFT_SCANNER_LED_INTERVAL  200
+#define DISPLAY_UPDATE_RATE        100 // 10hz
+#define THERMAL_CAMERA_INTERVAL     50 // twice per display refresh
+#define SERVO_DRAW_INTERVAL         38
 
 int mnLeftLEDCurrent = 0;
 
-bool mbBoardRedLED = false;
+bool mbBoardRedLED  = false;
 bool mbBoardBlueLED = false;
 
 //colors range is purple > blue > green > yellow > orange > red > pink > white
 const uint32_t mnIDLEDColorscape[] = {0x8010,0x0010,0x0400,0x7C20,0x8300,0x8000,0x8208,0x7C30};
+
 const String marrProfiles[] = {"ALPHA","BETA","GAMMA","DELTA","EPSILON","ZETA","ETA","THETA"};
 //reverse order for these makes the scroller show alpha when
 //const String marrProfiles[] = {"THETA","ETA","ZETA","EPSILON","DELTA","GAMMA","BETA","ALPHA"};
@@ -214,7 +214,6 @@ const uint16_t mnThermalCameraLabels[] = {0xD6BA,0xC0A3,0xD541,0xD660,0x9E02,0x0
 //color sensor
 bool color_sensor_initialized = false;
 
-#define RGB_SCAN_INTERVAL 5000
 int mnRGBCooldown = 0;
 
 //temperature, humidity, pressure
@@ -222,23 +221,21 @@ int mnRGBCooldown = 0;
 bool mbTempInitialized = false;
 bool mbHumidityInitialized = false;
 
-
 float mfTempC = 0.0;
 float mfTempK = 0.0;
 float mfHumid = 0.0;
-int mnBarom = 0;
+int mnBarom   = 0;
 
-#define CLIMATE_SCAN_INTERVAL 2000
-int mnClimateCooldown = 0;
-int mnTempTargetBar = 0;
-int mnTempCurrentBar = 0;
-int mnHumidTargetBar = 0;
-int mnHumidCurrentBar = 0;
-int mnBaromTargetBar = 0;
-int mnBaromCurrentBar = 0;
+int mnClimateCooldown =  0;
+int mnTempTargetBar   =  0;
+int mnTempCurrentBar  =  0;
+int mnHumidTargetBar  =  0;
+int mnHumidCurrentBar =  0;
+int mnBaromTargetBar  =  0;
+int mnBaromCurrentBar =  0;
 int mnClimateBarStart = 62;
 
-unsigned long mnLastTempBar = 0;
+unsigned long mnLastTempBar  = 0;
 unsigned long mnLastBaromBar = 0;
 unsigned long mnLastHumidBar = 0;
 
@@ -251,7 +248,6 @@ bool mbBaromBarComplete = false;
 
 int marrScaleNotches[] = {123, 185, 247};
 
-#define HOME_UPDATE_INTERVAL 1000
 
 unsigned long last_update_home_timestamp = 0;
 bool mbMicrophoneStarted = false;
@@ -262,24 +258,25 @@ extern PDMClass PDM;
 //mic sample rate is hertz, all samples are stored as 16 bit data.
 //number of samples must be double the desired resolution, and be a base 2 number
 //16k hertz -> 0-8k hertz max audio range captured
-#define MIC_SAMPLESIZE      256
+#define MIC_SAMPLESIZE         256
 //16k is the ONLY SUPPORTED SAMPLE RATE!
-//#define MIC_SAMPLERATE    16000
-#define MIC_AMPLITUDE     1000          // Depending on audio source level, you may need to alter this value. Can be used as a 'sensitivity' control.
-#define DECIMATION        64
-#define FFT_REFERENCELINES    16
-//#define FFT_MAX         150
-#define FFT_BINCOUNT          16
-#define FFT_BARHEIGHTMAX    64
+//#define MIC_SAMPLERATE        16000
+#define MIC_AMPLITUDE         1000  // Depending on audio source level, you may need to alter this value. Can be used as a 'sensitivity' control.
+#define DECIMATION              64
+#define FFT_REFERENCELINES      16
+//#define FFT_MAX                150
+#define FFT_BINCOUNT            16
+#define FFT_BARHEIGHTMAX        64
 
-#define GRAPH_OFFSET      10
-#define GRAPH_WIDTH (tft.width() - 3)
+#define GRAPH_OFFSET            10
+#define GRAPH_WIDTH  (tft.width() - 3)
 #define GRAPH_HEIGHT (tft.height() - GRAPH_OFFSET)
-#define GRAPH_MIN (tft.height() - 2)
-#define GRAPH_MAX (tft.height() - GRAPH_OFFSET)
+#define GRAPH_MIN    (tft.height() - 2)
+#define GRAPH_MAX    (tft.height() - GRAPH_OFFSET)
 
 long MIC_SAMPLERATE = 16000;
-int32_t mnMicVal = 0;
+int32_t mnMicVal    =     0;
+
 bool mbMicMaxRefresh = false;
 short mnarrSampleData[MIC_SAMPLESIZE];
 // number of samples read
@@ -293,7 +290,6 @@ int mnMaxDBValue = 0;
 
 unsigned long mnLastMicRead = 0;
 //decibel estimation every 3 seconds
-int mnMicReadInterval = 3000;
 short mCurrentMicDisplay[FFT_BINCOUNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 short mTargetMicDisplay[FFT_BINCOUNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
@@ -335,7 +331,6 @@ bool Thermal_Camera_Started = false;
 
 //this interval caps draw and thermal data frame rates. camera data will run slower than 30fps, but this throttle is needed to allow button press event polling
 //50ms -> 20fps cap
-#define THERMAL_CAMERA_INTERVAL 50
 //this must be less than 10 for all data to be displayed on 320x240.
 //this scales display window to 256 x 192, a border of 24px all around
 // if thermal camera is rotated 90 degrees, can change thermal to square viewport
@@ -371,10 +366,10 @@ const uint16_t mnarrThermalDisplayColors[] = {0x480F, 0x400F,0x400F,0x400F,0x401
 
 unsigned long mnButton2Press = 0;
 unsigned long mnButton3Press = 0;
+
 int mnServoButtonWindow = 1500;
 //graphs should take 3 seconds for full draw cycle-> 3000 / 80 lines
 
-#define SERVO_DRAW_INTERVAL  38
 unsigned long mnServoLastDraw = 0;
 
 uint8_t mnCurrentServoGraphPoint = 0;
@@ -397,12 +392,11 @@ typedef enum
 
 typedef enum
 {
-	TEMP_CLIMATE_BARGRAPH = 0,
-	HUMID_CLIMATE_BARGRAPH,
-	BAROM_CLIMATE_BARGRAPH,
+  TEMP_CLIMATE_BARGRAPH = 0,
+  HUMID_CLIMATE_BARGRAPH,
+  BAROM_CLIMATE_BARGRAPH,
 };
 
-#define DISPLAY_UPDATE_RATE 100 //move to display sub
 
 void setup() {
   //NRF_UICR->NFCPINS = 0;
@@ -554,7 +548,7 @@ void process_schedule()
   static byte last_state = INITILIZATION;
   uint8_t current_state = get_software_state();
 
-	//when a menu change occurs
+  //when a menu change occurs
   if (last_state != current_state)
   {
     last_state = current_state;
@@ -568,7 +562,7 @@ void process_schedule()
   {
     process_display_timer = millis();
     
-  	refresh_display_data();
+    refresh_display_data();
   }
 
   //TBD, change neopixel modes here
@@ -619,8 +613,8 @@ void oldloop() {
 }
 void update_menu_displayed()
 {
-	//only call this once per menu change
-	
+  //only call this once per menu change
+  
   switch(get_software_state())
   {
     case MAIN_SCREEN:
@@ -636,7 +630,7 @@ void update_menu_displayed()
       display_micrphone_screen();
       break;
     case BATTERY_SCREEN:
-    	//TBD
+      //TBD
       break;
     case HIDDEN_THERMAL_SCREEN:
       display_hidden_thermal_screen();
@@ -645,7 +639,7 @@ void update_menu_displayed()
       //RunTomServo();
       break;
     case HIDDEN_LIGHTING_DETECTOR_SCREEN:
-    	//TBD
+      //TBD
       break;
     default:
       break;
@@ -669,7 +663,7 @@ void refresh_display_data()
       RunMicrophone();
       break;
     case BATTERY_SCREEN:
-    	//TBD
+      //TBD
       break;
     case HIDDEN_THERMAL_SCREEN:
       RunThermal();
@@ -678,7 +672,7 @@ void refresh_display_data()
       //RunTomServo();
       break;
     case HIDDEN_LIGHTING_DETECTOR_SCREEN:
-    	//TBD
+      //TBD
       break;
     default:
       break;
@@ -957,8 +951,8 @@ void SetActiveNeoPixelButton(int nButtonID)
 
 void RunBoardLEDs() 
 {
-	static unsigned long mnLastUpdateBoardRedLED = 0;
-	static unsigned long mnLastUpdateBoardBlueLED = 0;
+  static unsigned long mnLastUpdateBoardRedLED = 0;
+  static unsigned long mnLastUpdateBoardBlueLED = 0;
   unsigned long current_time = millis();
 
   if ((current_time - mnLastUpdateBoardRedLED) > BOARD_RED_LED_INTERVAL) 
@@ -1086,7 +1080,7 @@ void reset_drawing_globals()
     MLX90640_SetRefreshRate(mbCameraAddress, 0x01);
   }
 
-	//ClearLeftScanner(); //TBD, needs testing
+  //ClearLeftScanner(); //TBD, needs testing
 
   ResetWireClock();
   DisableSound();
@@ -1939,7 +1933,7 @@ void RunMicrophone()
   {
     //use pdmwave value for decibel approximation?
     //poll this only once every few seconds - 5?
-    if (millis() - mnLastMicRead > mnMicReadInterval)
+    if (millis() - mnLastMicRead > MIC_READ_INTERVAL)
     {
       int dbValue = 0;
       //dbValue = 20 * log10(abs(GetPDMWave(4000)) / 8000);
@@ -2507,9 +2501,9 @@ void UpdateClimateBarGraph(int nBarIndex, uint16_t nBarColor)
   {
     case TEMP_CLIMATE_BARGRAPH:
       if ( (mbTempBarComplete) || 
-      	   (millis() - mnLastTempBar < BAR_DRAW_INTERVAL)) 
+           (millis() - mnLastTempBar < BAR_DRAW_INTERVAL)) 
       {
-      	break;
+        break;
       }
       
       nTempBarX = 61 + mnTempCurrentBar;
@@ -2539,9 +2533,9 @@ void UpdateClimateBarGraph(int nBarIndex, uint16_t nBarColor)
       break;
     case HUMID_CLIMATE_BARGRAPH:
       if ( (mbHumidBarComplete) || 
-      	   (millis() - mnLastHumidBar < BAR_DRAW_INTERVAL)) 
+           (millis() - mnLastHumidBar < BAR_DRAW_INTERVAL)) 
       {
-      	break;
+        break;
       }
       
       nHumidBarX = 61 + mnHumidCurrentBar;
@@ -2572,9 +2566,9 @@ void UpdateClimateBarGraph(int nBarIndex, uint16_t nBarColor)
       
     case BAROM_CLIMATE_BARGRAPH:
       if ( (mbBaromBarComplete) || 
-      	   (millis() - mnLastBaromBar < BAR_DRAW_INTERVAL)) 
+           (millis() - mnLastBaromBar < BAR_DRAW_INTERVAL)) 
       {
-      	break;
+        break;
       }
       
       nBaromBarX = 61 + mnBaromCurrentBar;
@@ -2648,7 +2642,7 @@ void UpdateMicrophoneGraph(short nMaxDataValue, uint16_t nBarColor)
     {
         nTempYDifference = (mCurrentMicDisplay[i] - mTargetMicDisplay[i]);
         
-  			//this requires 2 calls, as we need to trim from top down and bottom up for both halves of the bar
+        //this requires 2 calls, as we need to trim from top down and bottom up for both halves of the bar
         //top half
         tft.fillRect(nGraphMinX + (i * nBarWidthMargined), (nGraphZeroY - mCurrentMicDisplay[i]), nBarWidth, nTempYDifference, ST77XX_BLACK);
         //bottom half
@@ -2656,7 +2650,7 @@ void UpdateMicrophoneGraph(short nMaxDataValue, uint16_t nBarColor)
         //update current bar height
         mCurrentMicDisplay[i] = mTargetMicDisplay[i];
     }
-	}
+  }
 
   //reset refresh flag to false?
   mbMicrophoneRedraw = false;
@@ -2763,7 +2757,7 @@ void RunTomServo() {
   //3000ms is used because we want these bars to take 3 seconds to cycle through before starting over
   if (millis() - mnServoLastDraw < SERVO_DRAW_INTERVAL) 
   {
-  	return;
+    return;
   }
 
   const uint8_t nYBase1 =  98;
@@ -2833,6 +2827,6 @@ void RunTomServo() {
 
   ++mnCurrentServoGraphPoint;
   if (mnCurrentServoGraphPoint > 79) mnCurrentServoGraphPoint = 0;
-  	
+    
   mnServoLastDraw = millis();
 }
