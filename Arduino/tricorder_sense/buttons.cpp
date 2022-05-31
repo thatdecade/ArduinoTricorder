@@ -19,10 +19,10 @@
 // YOU WILL SEE THIS CONSTANT REFERENCED IN THAT FILE, with compiler-conditional logic around it to actually free up the NFC pins, 
 // but only if that constant exists in that file
 
-#define GEO_BUTTON_1_PIN        (1) //PIN_SERIAL1_RX - GEO
-#define MET_BUTTON_2_PIN        (0) //PIN_SERIAL1_TX - MET
-#define BIO_BUTTON_3_PIN        (2) //PIN_NFC2 - BIO
-#define CAM_BUTTON_BOARD        (7) //PIN_BUTTON1 - CAMERA / Board Button
+#define GEO_BUTTON_1_PIN        (11) // GEO
+#define MET_BUTTON_2_PIN        (12) // MET
+#define BIO_BUTTON_3_PIN        (13) // BIO
+#define CAM_BUTTON_BOARD        (7)  // PIN_BUTTON1 - CAMERA / Board Button
 
 byte pinMap_buttons[NUMBER_OF_BUTTONS] =
 {

@@ -18,9 +18,71 @@
 #include "menu_navigation.h"
 #include "sleep_timer.h"
 
-//full arduino pinout for this board is here:
-/* https://github.com/adafruit/Adafruit_nRF52_Arduino/blob/master/variants/feather_nrf52840_sense/variant.h */
+/*
+ Full arduino pinout for this board is here:
+ https://github.com/adafruit/Adafruit_nRF52_Arduino/blob/master/variants/feather_nrf52840_sense/variant.h
 
+  List of Hardware
+   - Adafruit Feather nRF52840 Sense
+   - LCD
+   - Audio FX
+   - Neopixels
+   - Buttons
+   - Sequin LEDs
+
+  I2C OnBoard
+  Addr  IRQ  Chip      Type            
+  0x61   D3  LSM6DS33  Gyro + Accel   
+  0x1C       LIS3MDL   Magnetometer   
+  0x44       SHT30     Humidity       
+  0x77       BMP280    Temp + Pressure  
+  0x39  D36  APDS9960  Light + Gesture + Proximity    
+  
+  I2C OffBoard
+  0x33       MLX90640  Thermal Camera
+  0x03  D11  AS3935    Lightning Detector
+  
+  Pin Assignements
+  Pin   Function Device
+   D6   CS       TFT
+   D5   DC       TFT
+  SCK   SCK      TFT
+   MO   MOSI     TFT
+   A6   Input    VOLTAGE_MONITOR 
+   A0   Input    Scroll Wheel (Library)
+  D11   Input    GEO Button (Left)
+  D12   Input    MET Button (Center)
+  D13   Input    BIO Button (Right)
+   D7   Input    Board Button (Camera)
+  D10   Data     Cover NeoPixels (PWR, ID, EMRG)
+   D8   Data     Board NeoPixels (Fr0nt, Camera Flash)
+   D9   Output   Audio FX Trigger
+   A2   Output   Left LED Scanner (ALPHA)
+   A3   Output   Left LED Scanner (BETA)
+   A4   Output   Left LED Scanner (GAMMA)
+   A5   Output   Left LED Scanner (DELTA)
+  D13   Output   Board Red LED
+   D4   Output   Board Blue LED
+   A1   IRQ      Lightning Detector
+  SCL   I2C      Thremal Camera / Lightning Detector
+  SDA   I2C      Thremal Camera / Lightning Detector
+  En    VREG     Enable Power Switch (Short to Ground for OFF)    
+  
+  If you run out of pins, consider moving the buttons and wheel to an Adafruit Joy Featherwing or other GPIO expander.
+  
+  -------------------------------------
+  
+  Adafruit defines physically labeled pin D2 as pin 2 in its header file, but it does not respond when set as an input by default.
+  you will need to modify system_nrf52840.c file by adding
+  #define CONFIG_NFCT_PINS_AS_GPIOS (1)
+  YOU WILL SEE THIS CONSTANT REFERENCED IN THAT FILE, with compiler-conditional logic around it to actually free up the NFC pins, 
+  but only if that constant exists in that file
+
+  -------------------------------------
+  
+ */
+ 
+ 
 // need to remove hyphens from header filenames or exception will get thrown
 #include "Fonts/lcars15pt7b.h"
 #include "Fonts/lcars11pt7b.h"
