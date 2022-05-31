@@ -144,101 +144,140 @@ void button_held(byte button)
 
 void process_left_click()
 {
-  //menu_navigation_back
-  set_software_state(software_state - 1);
+  switch (software_state)
+  {
+      case GO_TO_SLEEP:
+      case SLEEPING:
+      case INITILIZATION:
+        //wake up
+        set_software_state(INITILIZATION);
+        break;
+        
+      case MAIN_SCREEN:
+      case RGB_SCREEN:
+      case CLIMATE_SCREEN:
+      case MICROPHONE_SCREEN:
+      case BATTERY_SCREEN:
+        //menu_navigation_back
+        set_software_state(software_state - 1);
+        break;
+        
+      case HIDDEN_THERMAL_SCREEN:
+      case HIDDEN_TOM_SERVO_SCREEN:
+      case HIDDEN_LIGHTING_DETECTOR_SCREEN:
+        set_software_state(MAIN_SCREEN);
+        break;
+        
+      default:
+        //do nothing
+        break;
+  }
 }
 
 void process_right_click()
 {
-  //menu_navigation_forward
-  set_software_state(software_state + 1);
+  switch (software_state)
+  {
+      case GO_TO_SLEEP:
+      case SLEEPING:
+      case INITILIZATION:
+        //wake up
+        set_software_state(INITILIZATION);
+        break;
+        
+      case MAIN_SCREEN:
+      case RGB_SCREEN:
+      case CLIMATE_SCREEN:
+      case MICROPHONE_SCREEN:
+      case BATTERY_SCREEN:
+        //menu_navigation_forward
+        set_software_state(software_state + 1);
+        break;
+        
+      case HIDDEN_THERMAL_SCREEN:
+      case HIDDEN_TOM_SERVO_SCREEN:
+      case HIDDEN_LIGHTING_DETECTOR_SCREEN:
+        set_software_state(MAIN_SCREEN);
+        break;
+        
+      default:
+        //do nothing
+        break;
+  }
 }
 
 void process_center_click()
-{
-    switch (software_state)
-    {
-        //TBD
-        
-        default:
-            //do nothing
-            break;
-    }
-}
-
-void process_camera_click()
-{
-    switch (software_state)
-    {
-        //TBD
-        
-        default:
-            //do nothing
-            break;
-    }
-}
-
-void process_left_hold()
-{
-    switch (software_state)
-    {
-        //TBD
-        
-        default:
-            //do nothing
-            break;
-    }
-}
-
-void process_center_hold()
 {
   //go home
   set_software_state(MAIN_SCREEN);
 }
 
+void process_camera_click()
+{
+  static uint8_t save_state = MAIN_SCREEN;
+  
+  switch (software_state)
+  {
+      case GO_TO_SLEEP:
+      case SLEEPING:
+      case INITILIZATION:
+        //wake up
+        set_software_state(INITILIZATION);
+        break;
+        
+      case MAIN_SCREEN:
+      case RGB_SCREEN:
+      case CLIMATE_SCREEN:
+      case MICROPHONE_SCREEN:
+      case BATTERY_SCREEN:
+      case HIDDEN_TOM_SERVO_SCREEN:
+      case HIDDEN_LIGHTING_DETECTOR_SCREEN:
+        //launch camera
+        save_state = software_state;
+        set_software_state(HIDDEN_THERMAL_SCREEN);
+        break;
+        
+      case HIDDEN_THERMAL_SCREEN:
+        //return to previous screen
+        set_software_state(save_state);
+        
+      default:
+        //do nothing
+        break;
+  }
+}
+
+void process_left_hold()
+{
+  //TBD
+}
+
+void process_center_hold()
+{
+  //TBD
+}
+
 void process_right_hold()
 {
-    switch (software_state)
-    {
-        //TBD
-        
-        default:
-            //do nothing
-            break;
-    }
+  //TBD
 }
 
 void process_camera_hold()
 {
-    switch (software_state)
-    {
-        //TBD
-        
-        default:
-            //do nothing
-            break;
-    }
+  //TBD
 }
 
 /* ******************************* */
 
 void set_software_state(uint8_t new_state)
 {
-  //when atempting to exit a hidden mode, just go home
-  if(software_state > HIDDEN_EXIT_GO_HOME)
-  {
-    software_state = MAIN_SCREEN;
-  }
-  else if (software_state < SYSTEM_NO_CHANGE_MODES)
-  {
-    //these are initilization modes, do nothing
-  }
-  else
+  //validate state
+  if(new_state < LAST_MENU_ITEM)
   {
     software_state = new_state;
   }
   
-  //handle warp around
+  //handle wrap around
   switch (software_state)
   {
     case MENU_SCREEN_WRAP_LOW:
