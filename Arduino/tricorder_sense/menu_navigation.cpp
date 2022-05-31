@@ -144,24 +144,14 @@ void button_held(byte button)
 
 void process_left_click()
 {
-#define MENU_HIGH_WRAP_AROUND MAIN_SCREEN
-#define MENU_LOW_WRAP_AROUND  BATTERY_SCREEN
-  if(software_state >= MENU_HIGH_WRAP_AROUND)
-  {
-    //menu_navigation_back
-    set_software_state(software_state - 1);
-  }
-  //else, do nothing
+  //menu_navigation_back
+  set_software_state(software_state - 1);
 }
 
 void process_right_click()
 {
-  if(software_state <= MENU_LOW_WRAP_AROUND)
-  {
-    //menu_navigation_forward
-    set_software_state(software_state + 1);
-  }
-  //else, do nothing
+  //menu_navigation_forward
+  set_software_state(software_state + 1);
 }
 
 void process_center_click()
@@ -234,8 +224,20 @@ void process_camera_hold()
 
 void set_software_state(uint8_t new_state)
 {
-  software_state = new_state;
-
+  //when atempting to exit a hidden mode, just go home
+  if(software_state > HIDDEN_EXIT_GO_HOME)
+  {
+    software_state = MAIN_SCREEN;
+  }
+  else if (software_state < SYSTEM_NO_CHANGE_MODES)
+  {
+    //these are initilization modes, do nothing
+  }
+  else
+  {
+    software_state = new_state;
+  }
+  
   //handle warp around
   switch (software_state)
   {

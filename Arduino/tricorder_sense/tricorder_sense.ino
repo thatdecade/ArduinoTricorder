@@ -206,11 +206,12 @@ const String marrProfiles[] = {"ALPHA","BETA","GAMMA","DELTA","EPSILON","ZETA","
 
 const uint16_t mnThermalCameraLabels[] = {0xD6BA,0xC0A3,0xD541,0xD660,0x9E02,0x0458,0x89F1};
 
-bool color_sensor_initialized = false;
-bool mbTempInitialized        = false;
-bool mbHumidityInitialized    = false;
-bool mbMicrophoneStarted      = false;
-bool Thermal_Camera_Started   = false;
+bool color_sensor_initialized  = false;
+bool mbTempInitialized         = false;
+bool mbHumidityInitialized     = false;
+bool mbMicrophoneStarted       = false;
+bool Thermal_Camera_Started    = false;
+bool magnet_sensor_initialized = false;
 
 int mnRGBCooldown = 0;
 
@@ -283,9 +284,6 @@ unsigned long mnLastMicRead = 0;
 short mCurrentMicDisplay[FFT_BINCOUNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 short mTargetMicDisplay[FFT_BINCOUNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
-bool mbSleepMode = false;
-
-bool mbMagnetometer = false;
 //float mfMagnetX, mfMagnetY, mfMagnetz;
 int mnLastMagnetCheck = 0;
 
@@ -357,11 +355,11 @@ const uint8_t mnarrServoGraphData[] = {3,7,10,12,13,14,14,14,13,12,10,7,4,4,6,8,
 enum
 {
   HOME_NEOPIXEL_PATTERN = 0,
-  GEO_NEO_PIXEL_PATTERN,
-  MET_NEO_PIXEL_PATTERN,
-  BIO_NEO_PIXEL_PATTERN,
-  CAM_NEO_PIXEL_PATTERN,
-  TOM_NEO_PIXEL_PATTERN,
+  GEO_CLIMATE_NEO_PIXEL_PATTERN,
+  MET_RGB_NEO_PIXEL_PATTERN,
+  BIO_MICROPHONE_NEO_PIXEL_PATTERN,
+  CAM_THERMAL_NEO_PIXEL_PATTERN,
+  TOM_SERVO_NEO_PIXEL_PATTERN,
   OFF_NEO_PIXEL_PATTERN,
 };
 
@@ -422,7 +420,8 @@ void setup()
   //DO NOT call any functions before the begin, or you'll lock up the board
   color_sensor_initialized = oColorSensor.begin();
 
-  if (color_sensor_initialized) {
+  if (color_sensor_initialized) 
+  {
     //need rgb to cap at 255 for calculations? this isn't limiting shit.
     //proximity sensor has a range of 4-8 inches, or 10-20cm
     oColorSensor.setIntLimits(0, 255);
@@ -443,16 +442,16 @@ void setup()
   mbMicrophoneStarted = PDM.begin(1, MIC_SAMPLERATE);
   PDM.end();
 
-  mbMagnetometer = oMagneto.begin_I2C();
+  magnet_sensor_initialized = oMagneto.begin_I2C();
 
   //all magnet settings - data rate of 1.25Hz a bit faster than 1 per second
   oMagneto.setPerformanceMode(LIS3MDL_MEDIUMMODE);
   oMagneto.setOperationMode(LIS3MDL_CONTINUOUSMODE);
   //oMagneto.setIntThreshold(500);
-  //can be 4, 8, 12, 16 - don't need high range here, as magnet in door will be pretty strong and very close
+  
+  // can be 4, 8, 12, 16 - don't need high range here, as magnet in door will be pretty strong and very close
   oMagneto.setRange(LIS3MDL_RANGE_8_GAUSS);
-  /*oMagneto.configInterrupt(false, false, true, true, false, true);
-  */
+  //oMagneto.configInterrupt(false, false, true, true, false, true);
 
   SetThermalClock();
   uint16_t oCameraParams[834];
@@ -460,7 +459,8 @@ void setup()
 
   nStatus = MLX90640_DumpEE(mbCameraAddress, oCameraParams);
 
-  if (nStatus == 0) {
+  if (nStatus == 0) 
+  {
     Thermal_Camera_Started = true;
     nStatus = MLX90640_ExtractParameters(oCameraParams, &moCameraParams);
     //start at 1hz
@@ -507,31 +507,31 @@ void loop()
     process_menu_selection();
   }
 
-  //check for other system state change (interrupt flags)
+  //check for other system state changes (sleep / interrupt flags)
   //TBD
+  check_for_sleep();
 
   //run processes (sensors, displays, lights, etc)
   process_schedule();
-
 }
-
 
 void process_schedule()
 {
   static unsigned long process_display_timer = 0;
   static byte last_state = INITILIZATION;
   uint8_t current_state = get_software_state();
-
-  //when a menu change occurs
+  
+  //these are the "do once" things when the mode changes
   if (last_state != current_state)
   {
     last_state = current_state;
     
     reset_drawing_globals();
     update_menu_displayed();
+    update_neopixel_pattern();
+  //TBD, change audio mode here (prevent hiccups)
   }
   
-
   if (millis() > process_display_timer + DISPLAY_UPDATE_RATE)
   {
     process_display_timer = millis();
@@ -539,21 +539,15 @@ void process_schedule()
     refresh_display_data();
   }
 
-  //TBD, change neopixel modes here
-
-  //TBD, change audio mode here (prevent hiccups)
-
   //update neopixels
   RunNeoPixelColor(NEOPIXEL_CHAIN_DATAPIN);
   RunNeoPixelColor(NEOPIXEL_BOARD_LED_PIN);
   RunLeftScanner();
   RunBoardLEDs();
-
-  //check magnetometer for sleep
-  //TBD
 }
 
-void oldloop() {
+void check_for_sleep() 
+{
   //if magnet read in Z direction is over a threshold, trigger sleep.
   //check this first in the loop, as everything else depends on it
   //magnet from speaker throws z = ~ +14000, no magnets has z idle at ~ -500
@@ -561,36 +555,52 @@ void oldloop() {
   //all analogRead actions depend on resolution setting - changing this will screw with battery % readings
 
   //need tests with speaker above and door magnet below - may require testing within assembled shell
-  #if !defined(MAGNET_DEBUG)
-    if ((millis() - mnLastMagnetCheck) > MAGNET_READ_INTERVAL) {
+#ifndef MAGNET_DEBUG
+    if ( ( magnet_sensor_initialized ) && 
+         ( (nNowMillis - mnLastMagnetCheck) > MAGNET_READ_INTERVAL ) ) 
+    {
+      mnLastMagnetCheck = millis();
       oMagneto.read();
+      
       //magnet function modification needs to use a massive drop as the sleep trigger.
       int nCurrentMagnetZ = oMagneto.y;
 
-      if (!mbSleepMode && (nCurrentMagnetZ < mnMagnetSleepThreshold)) {
-        SleepMode();
-      } else if (mbSleepMode && (nCurrentMagnetZ > mnMagnetSleepThreshold)) {
-        ActiveMode();
+      if ( (get_software_state() != GO_TO_SLEEP) && 
+           (nCurrentMagnetZ < mnMagnetSleepThreshold) ) 
+      {
+        set_software_state(GO_TO_SLEEP);
+      } 
+      else if ( (get_software_state() == GO_TO_SLEEP) && 
+                (nCurrentMagnetZ > mnMagnetSleepThreshold) ) 
+      {
+        set_software_state(MAIN_SCREEN); //maybe INITILIZATION?
       }
-      mnLastMagnetCheck = millis();
     }
-  #endif
+#endif
 
-  if (mbSleepMode) {
-    if (ledPwrStrip.getPixelColor(1) != ST77XX_BLACK) {
+  if (get_software_state() == GO_TO_SLEEP)
+  {
+    if (ledPwrStrip.getPixelColor(1) != ST77XX_BLACK) 
+    {
       ledPwrStrip.clear();
       ledPwrStrip.show();
     }
-    return;
   }
-
 }
+
 void update_menu_displayed()
 {
   //only call this once per menu change
   
   switch(get_software_state())
   {
+    case INITILIZATION:
+      ActiveMode(); // INITILIZATION -> MAIN_SCREEN
+      display_home_screen(); //TBD: This may cause a display hiccup
+      break;
+    case GO_TO_SLEEP:
+      SleepMode();
+      break;
     case MAIN_SCREEN:
       display_home_screen();
       break;
@@ -610,12 +620,13 @@ void update_menu_displayed()
       display_hidden_thermal_screen();
       break;
     case HIDDEN_TOM_SERVO_SCREEN:
-      //RunTomServo();
+      //ActivateTomServo();
       break;
     case HIDDEN_LIGHTING_DETECTOR_SCREEN:
       //TBD
       break;
     default:
+      //SLEEPING
       break;
   }
 }
@@ -653,9 +664,46 @@ void refresh_display_data()
   }
 }
 
-void SleepMode() {
-  mbSleepMode = true;
+void update_neopixel_pattern()
+{
+  //only call this once per menu change
+  
+  switch(get_software_state())
+  {
+    case GO_TO_SLEEP:
+      SetActiveNeoPixelButton(OFF_NEO_PIXEL_PATTERN);
+      break;
+    case MAIN_SCREEN:
+      SetActiveNeoPixelButton(HOME_NEOPIXEL_PATTERN);
+      break;
+    case RGB_SCREEN:
+      SetActiveNeoPixelButton(MET_RGB_NEO_PIXEL_PATTERN);
+      break;
+    case CLIMATE_SCREEN:
+      SetActiveNeoPixelButton(GEO_CLIMATE_NEO_PIXEL_PATTERN);
+      break;
+    case MICROPHONE_SCREEN:
+      SetActiveNeoPixelButton(BIO_MICROPHONE_NEO_PIXEL_PATTERN);
+      break;
+    case BATTERY_SCREEN:
+      //TBD
+      break;
+    case HIDDEN_THERMAL_SCREEN:
+      SetActiveNeoPixelButton(CAM_THERMAL_NEO_PIXEL_PATTERN);
+      break;
+    case HIDDEN_TOM_SERVO_SCREEN:
+      SetActiveNeoPixelButton(TOM_SERVO_NEO_PIXEL_PATTERN);
+      break;
+    case HIDDEN_LIGHTING_DETECTOR_SCREEN:
+      //TBD
+      break;
+    default:
+      break;
+  }
+}
 
+void SleepMode() 
+{
   //turn off screen
   tft.fillScreen(ST77XX_BLACK);
   //need wired pin to set backlight low here
@@ -687,8 +735,6 @@ void SleepMode() {
   mnCurrentServoGraphPoint = 0;
   mnServoLastDraw = 0;
   
-  SetActiveNeoPixelButton(OFF_NEO_PIXEL_PATTERN);
-
   //reset any bar graph values from climate
   mnTempTargetBar   = 0;
   mnTempCurrentBar  = 0;
@@ -699,10 +745,12 @@ void SleepMode() {
   mbHumidBarComplete = false;
   mbTempBarComplete  = false;
   mbBaromBarComplete = false;
+
+  set_software_state(SLEEPING);
 }
 
-void ActiveMode() {
-  mbSleepMode = false;
+void ActiveMode() 
+{
   tft.enableSleep(false);
   //tft.enableDisplay(true);
   
@@ -887,31 +935,31 @@ void SetActiveNeoPixelButton(int nButtonID)
         break;
         
     //GEO
-    case GEO_NEO_PIXEL_PATTERN: ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-5, 128, 96, 0);
+    case GEO_CLIMATE_NEO_PIXEL_PATTERN: ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-5, 128, 96, 0);
         ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-4, 0, 128, 0);
         ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-3, 0, 128, 0);
         break;
         
     //MET
-    case MET_NEO_PIXEL_PATTERN: ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-5, 0, 128, 0);
+    case MET_RGB_NEO_PIXEL_PATTERN: ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-5, 0, 128, 0);
         ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-4, 128, 96, 0);
         ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-3, 0, 128, 0);
         break;
         
     //BIO
-    case BIO_NEO_PIXEL_PATTERN: ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-5, 0, 128, 0);
+    case BIO_MICROPHONE_NEO_PIXEL_PATTERN: ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-5, 0, 128, 0);
         ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-4, 0, 128, 0);
         ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-3, 128, 96, 0);
         break;
         
     //CAMERA - all RED
-    case CAM_NEO_PIXEL_PATTERN: ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-5, 128, 0, 0);
+    case CAM_THERMAL_NEO_PIXEL_PATTERN: ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-5, 128, 0, 0);
         ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-4, 128, 0, 0);
         ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-3, 128, 0, 0);
         break;
         
     //TOM SERVO - all BLUE? PURPLE?
-    case TOM_NEO_PIXEL_PATTERN: ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-5, 0, 0, 128);
+    case TOM_SERVO_NEO_PIXEL_PATTERN: ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-5, 0, 0, 128);
         ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-4, 0, 0, 128);
         ledPwrStrip.setPixelColor(NEOPIXEL_LED_COUNT-3, 0, 0, 128);
         break;
@@ -1083,8 +1131,6 @@ void reset_drawing_globals()
 
 void display_home_screen()
 {
-  SetActiveNeoPixelButton(HOME_NEOPIXEL_PATTERN);
-
   // home screen header is 2 rounded rectangles, lines to cut them, 1 black rect as backing for header text
   //fillRoundRect(x,y,width,height,cornerRadius, color)
   //top and bottom borders
@@ -1288,8 +1334,10 @@ void RunHome()
   }
 
   //raw magnet z index data output to home screen for debug
-  #if defined(MAGNET_DEBUG)
-  if (mbMagnetometer && ((nNowMillis - mnLastMagnetCheck) > MAGNET_READ_INTERVAL)) {
+#ifdef MAGNET_DEBUG
+  if ( ( magnet_sensor_initialized ) && 
+       ( (nNowMillis - mnLastMagnetCheck) > MAGNET_READ_INTERVAL ) ) 
+  {
     oMagneto.read();
     //output raw data to screen - test this with magnet behind 4mm of PLA ~
     //drawParamText(250, 25, (String)oMagneto.x, color_MAINTEXT);
@@ -1299,7 +1347,8 @@ void RunHome()
     drawParamText(250, 75, (String)oMagneto.y, color_MAINTEXT);
     mnLastMagnetCheck = nNowMillis;
   }
-  #endif
+#endif
+
 }
 
 void ResetWireClock() {
@@ -1327,9 +1376,7 @@ void display_RGB_screen()
   }
   else
   {
-    SetActiveNeoPixelButton(MET_NEO_PIXEL_PATTERN);
     ActivateSound();
-    
     
     //load rgb scanner screen - this is done once to improve perf
     tft.fillScreen(ST77XX_BLACK);
@@ -1572,7 +1619,6 @@ uint8_t GetBatteryPercent() {
 
 void display_climate_screen()
 {
-  SetActiveNeoPixelButton(GEO_NEO_PIXEL_PATTERN);
 
   ActivateSound();
 
@@ -1779,8 +1825,6 @@ void RunClimateSensor()
 void display_micrphone_screen()
 {
   DisableSound();
-
-  SetActiveNeoPixelButton(BIO_NEO_PIXEL_PATTERN);
 
   //show audio screen
   //tft.fillScreen(0x6B6D);
@@ -2015,7 +2059,6 @@ void display_hidden_thermal_screen()
   }
   else
   {
-    SetActiveNeoPixelButton(CAM_NEO_PIXEL_PATTERN);
 
     //Wire.beginTransmission(MLX90640_I2CADDR_DEFAULT);
 
@@ -2630,7 +2673,6 @@ void UpdateMicrophoneGraph(short nMaxDataValue, uint16_t nBarColor)
 
 void ActivateTomServo() 
 {
-  SetActiveNeoPixelButton(TOM_NEO_PIXEL_PATTERN);
 
   //58x237, 21 round
   tft.fillRoundRect(1, 3, 70, 237, 21, color_HEADER);

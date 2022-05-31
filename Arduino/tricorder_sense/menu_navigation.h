@@ -15,7 +15,12 @@
 /* --------------------- */
 enum menu_page_order
 {
-   INITILIZATION = 0,
+   GO_TO_SLEEP = 0,
+   SLEEPING,
+   INITILIZATION,
+   
+   SYSTEM_NO_CHANGE_MODES, //entries above this line are special
+   
    MENU_SCREEN_WRAP_LOW,
    MAIN_SCREEN,
    RGB_SCREEN,
@@ -23,6 +28,9 @@ enum menu_page_order
    MICROPHONE_SCREEN,
    BATTERY_SCREEN,
    MENU_SCREEN_WRAP_HIGH,
+   
+   HIDDEN_EXIT_GO_HOME, //entries below this line, can only be exited to home
+   
    HIDDEN_THERMAL_SCREEN,
    HIDDEN_TOM_SERVO_SCREEN,
    HIDDEN_LIGHTING_DETECTOR_SCREEN,
