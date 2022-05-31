@@ -16,6 +16,7 @@
 #include <Adafruit_LSM6DS33.h>
 #include "buttons.h"
 #include "menu_navigation.h"
+#include "sleep_timer.h"
 
 //full arduino pinout for this board is here:
 /* https://github.com/adafruit/Adafruit_nRF52_Arduino/blob/master/variants/feather_nrf52840_sense/variant.h */
@@ -285,7 +286,6 @@ short mCurrentMicDisplay[FFT_BINCOUNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 short mTargetMicDisplay[FFT_BINCOUNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 //float mfMagnetX, mfMagnetY, mfMagnetz;
-int mnLastMagnetCheck = 0;
 
 //if this cutoff is not working, either change where your speaker sits in the shell or add another magnet to your door to force the z-drop
 //int mnLastMagnetValue = 0;
@@ -401,7 +401,7 @@ void setup()
   pinMode(LED_BLUE, OUTPUT);
 
   pinMode(SOUND_TRIGGER_PIN, OUTPUT);
-  digitalWrite(SOUND_TRIGGER_PIN, HIGH);
+  DisableSound();
 
   //or it'll be read as low and boot the tricorder into environment section
   disable_input_switches();
@@ -524,12 +524,14 @@ void process_schedule()
   //these are the "do once" things when the mode changes
   if (last_state != current_state)
   {
-    last_state = current_state;
-    
+    reset_sleep_timer();
     reset_drawing_globals();
     update_menu_displayed();
     update_neopixel_pattern();
-  //TBD, change audio mode here (prevent hiccups)
+    update_sound();
+    
+    //save last_state at end. Allows smooth init->main transition
+    last_state = current_state;
   }
   
   if (millis() > process_display_timer + DISPLAY_UPDATE_RATE)
@@ -548,42 +550,44 @@ void process_schedule()
 
 void check_for_sleep() 
 {
+  static unsigned long mnLastMagnetCheck = 0;
+  int nCurrentMagnetZ = 0;
+
   //if magnet read in Z direction is over a threshold, trigger sleep.
-  //check this first in the loop, as everything else depends on it
+  //use MAGNET_DEBUG to check this first in the loop, as everything else depends on it
   //magnet from speaker throws z = ~ +14000, no magnets has z idle at ~ -500
   //use z > 5000 ?
   //all analogRead actions depend on resolution setting - changing this will screw with battery % readings
 
-  //need tests with speaker above and door magnet below - may require testing within assembled shell
+  if ( (millis() - mnLastMagnetCheck) > MAGNET_READ_INTERVAL )
+  {
 #ifndef MAGNET_DEBUG
-    if ( ( magnet_sensor_initialized ) && 
-         ( (millis() - mnLastMagnetCheck) > MAGNET_READ_INTERVAL ) ) 
+    if (magnet_sensor_initialized) 
     {
       mnLastMagnetCheck = millis();
-      oMagneto.read();
       
+      oMagneto.read();
+      //need tests with speaker above and door magnet below - may require testing within assembled shell
       //magnet function modification needs to use a massive drop as the sleep trigger.
-      int nCurrentMagnetZ = oMagneto.y;
-
-      if ( (get_software_state() != GO_TO_SLEEP) && 
-           (nCurrentMagnetZ < mnMagnetSleepThreshold) ) 
-      {
-        set_software_state(GO_TO_SLEEP);
-      } 
-      else if ( (get_software_state() == GO_TO_SLEEP) && 
-                (nCurrentMagnetZ > mnMagnetSleepThreshold) ) 
-      {
-        set_software_state(MAIN_SCREEN); //maybe INITILIZATION?
-      }
+      nCurrentMagnetZ = oMagneto.y;
     }
 #endif
-
-  if (get_software_state() == GO_TO_SLEEP)
-  {
-    if (ledPwrStrip.getPixelColor(1) != ST77XX_BLACK) 
+    
+    // go to sleep if:
+    // - no button interaction for 10 minutes
+    // - door is closed 
+    if ( ( (check_sleep_timer()) ||
+           (nCurrentMagnetZ < mnMagnetSleepThreshold) ) )
     {
-      ledPwrStrip.clear();
-      ledPwrStrip.show();
+      if (get_software_state() > SYSTEM_NO_CHANGE_MODES)
+      {
+        //if not already sleeping, send to sleep
+        set_software_state(GO_TO_SLEEP);
+      }
+    }
+    else
+    {
+      set_software_state(INITILIZATION);
     }
   }
 }
@@ -595,14 +599,13 @@ void update_menu_displayed()
   switch(get_software_state())
   {
     case INITILIZATION:
-      ActiveMode(); // INITILIZATION -> MAIN_SCREEN
-      display_home_screen(); //TBD: This may cause a display hiccup
+      ActiveMode(); // side effect: INITILIZATION -> MAIN_SCREEN
+      //no break here, allow to continue into MAIN_SCREEN
+    case MAIN_SCREEN:
+      display_home_screen();
       break;
     case GO_TO_SLEEP:
       SleepMode();
-      break;
-    case MAIN_SCREEN:
-      display_home_screen();
       break;
     case RGB_SCREEN:
       display_RGB_screen();
@@ -702,6 +705,36 @@ void update_neopixel_pattern()
   }
 }
 
+void update_sound()
+{
+  //only call this once per menu change
+  
+  switch(get_software_state())
+  {
+    case GO_TO_SLEEP:
+    case SLEEPING:
+    case MICROPHONE_SCREEN:
+    case HIDDEN_THERMAL_SCREEN:
+      DisableSound();
+      break;
+    case MAIN_SCREEN:
+    case RGB_SCREEN:
+    case CLIMATE_SCREEN:
+      ActivateSound();
+      break;
+    case BATTERY_SCREEN:
+      //TBD
+      break;
+    case HIDDEN_TOM_SERVO_SCREEN:
+      break;
+    case HIDDEN_LIGHTING_DETECTOR_SCREEN:
+      //TBD
+      break;
+    default:
+      break;
+  }
+}
+
 void SleepMode() 
 {
   //turn off screen
@@ -710,23 +743,24 @@ void SleepMode()
   //digitalWrite(DISPLAY_BACKLIGHT_PIN, LOW);
   tft.enableSleep(true);
 
-  //set sound trigger pin HIGH, as low causes playback
-  digitalWrite(SOUND_TRIGGER_PIN, HIGH);
-
   //board edge LEDs off
   digitalWrite(LED_RED, LOW);
   digitalWrite(LED_BLUE, LOW);
+  
   //board "power" / "camera flash" LED off
-  ledBoard.setPixelColor(0, 0, 0, 0);
+  ledBoard.clear(); //Note, this still leaves the pixels powered on
   ledBoard.show();
+  
+  //set chained neopixels off - PWR, EMRG, ID
+  ledPwrStrip.clear();
+  ledPwrStrip.show();
+  
   //left scanner LEDs off
   analogWrite(SCAN_LED_PIN_1, 0);
   analogWrite(SCAN_LED_PIN_2, 0);
   analogWrite(SCAN_LED_PIN_3, 0);
   analogWrite(SCAN_LED_PIN_4, 0);
-  //set chained neopixels off - PWR, EMRG, ID
-  ledPwrStrip.clear();
-  //ledPwrStrip.show();
+  
   mbLEDIDSet = false;
 
   //reset all "status" variables
@@ -1104,7 +1138,6 @@ void reset_drawing_globals()
   //ClearLeftScanner(); //TBD, needs testing
 
   ResetWireClock();
-  DisableSound();
 
   //reset any previous sensor statuses
   mnRGBCooldown     = 0; //reset any rgb sensor values
@@ -1286,6 +1319,7 @@ void display_home_screen()
 void RunHome()
 {
   static unsigned long mnLastUpdateHome = 0;
+  static unsigned long mnLastMagnetCheck = 0;
   unsigned long nNowMillis = millis();
 
   //show system uptime, battery level
@@ -1338,14 +1372,16 @@ void RunHome()
   if ( ( magnet_sensor_initialized ) && 
        ( (nNowMillis - mnLastMagnetCheck) > MAGNET_READ_INTERVAL ) ) 
   {
+    mnLastMagnetCheck = nNowMillis;
+    
     oMagneto.read();
+    
     //output raw data to screen - test this with magnet behind 4mm of PLA ~
     //drawParamText(250, 25, (String)oMagneto.x, color_MAINTEXT);
     //drawParamText(250, 50, (String)oMagneto.y, color_MAINTEXT);
     tft.fillRect(250, 45, 40, 35, ST77XX_BLACK);
     //drawParamText(250, 55, (String)oMagneto.x, color_MAINTEXT);
     drawParamText(250, 75, (String)oMagneto.y, color_MAINTEXT);
-    mnLastMagnetCheck = nNowMillis;
   }
 #endif
 
@@ -1376,8 +1412,6 @@ void display_RGB_screen()
   }
   else
   {
-    ActivateSound();
-    
     //load rgb scanner screen - this is done once to improve perf
     tft.fillScreen(ST77XX_BLACK);
     tft.fillRoundRect(0, -25, 100, 140, 25, color_SWOOP);
@@ -1619,9 +1653,6 @@ uint8_t GetBatteryPercent() {
 
 void display_climate_screen()
 {
-
-  ActivateSound();
-
   //load temp scanner screen - this is done once to improve perf
   tft.fillScreen(ST77XX_BLACK);
   tft.fillRoundRect(0, -25, 85, 113, 25, color_SWOOP);
@@ -1824,8 +1855,6 @@ void RunClimateSensor()
 
 void display_micrphone_screen()
 {
-  DisableSound();
-
   //show audio screen
   //tft.fillScreen(0x6B6D);
   tft.fillScreen(ST77XX_BLACK);
@@ -2066,7 +2095,6 @@ void display_hidden_thermal_screen()
     //oThermalCamera.setRefreshRate(MLX90640_4_HZ);
     SetThermalClock();
     MLX90640_SetRefreshRate(mbCameraAddress, 0x04);
-    DisableSound();
 
     //draw border for thermal camera visualization
     //main swoop left and right 22x30, 6x33
