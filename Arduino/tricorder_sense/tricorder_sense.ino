@@ -32,27 +32,20 @@
 #define TFT_CS                (6)
 // SD card select pin
 //#define SD_CS       11  //- can't use pin 4 as that is for blue connection led
-#define TFT_RST               -1
+#define TFT_RST               -1  //disabled
 #define TFT_DC                (5)
 #define USE_SD_CARD           (0)
 
 //pin 9 is free, as pin_a6 is for vbat and is otherwise known as digital 20
-#define VOLT_PIN              PIN_A6    //INPUT_POWER_PIN
+ //INPUT_POWER_PIN. 
+ //mnRF52840 is not 5V tolerance, max analog-in is VCC+0.3V or 3.9V, whichever is lower.  
+ // The adafruit sense board has a hardwired 50% voltage divider.
+#define VOLT_PIN              PIN_A6   
+
 #define SOUND_TRIGGER_PIN     (9)
 
-//buttons, scroller - d2 pin supposed to be pin #2
-//button on the board is connected to pin 7.  TX is pin 0, RX is pin 1 - these are normally used for serial communication
+//buttons are defined in buttons.h
 
-#define BUTTON_1_PIN          (1) //PIN_SERIAL1_RX - GEO
-#define BUTTON_2_PIN          (0) //PIN_SERIAL1_TX - MET
-//adafruit defines physically labeled pin D2 as pin 2 in its header file, but it does not respond when set as an input by default.
-//you will need to modify system_nrf52840.c file by adding
-//#define CONFIG_NFCT_PINS_AS_GPIOS (1)
-//YOU WILL SEE THIS CONSTANT REFERENCED IN THAT FILE, with compiler-conditional logic around it to actually free up the NFC pins, but only if that constant exists in that file
-#define BUTTON_3_PIN          (2) //BIO
-
-//pin 7 is the board button
-#define BUTTON_BOARD          (7) //PIN_BUTTON1 - CAMERA
 //only need 1 pin for potentiometer / scroller input. both poles need to be wired to GND and 3v - order doesn't matter
 #define PIN_SCROLL_INPUT      PIN_A0
 
@@ -86,6 +79,7 @@
 
 //uncomment this line to have raw magnetometer z value displayed on home screen
 //#define MAGNET_DEBUG
+
 //the -700 threshold was based on resolution of 10, or 1024 max
 //-20000 is based on the analog resolution required by battery pin (-32768 to 32768 range)
 //this is intended for the z index reading of magnetometer (negative means field is below the board)
@@ -150,11 +144,12 @@ Adafruit_NeoPixel ledPwrStrip(NEOPIXEL_LED_COUNT, NEOPIXEL_CHAIN_DATAPIN, NEO_GR
 Adafruit_NeoPixel ledBoard(1, NEOPIXEL_BOARD_LED_PIN, NEO_GRB + NEO_KHZ800);
 
 // do not fuck with this. 2.0 IS THE BOARD - this call uses hardware SPI
-Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
+Adafruit_ST7789   tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 //create sensor objects
 Adafruit_APDS9960 oColorSensor;
-Adafruit_BMP280 oTempBarom;
-Adafruit_SHT31 oHumid;
+Adafruit_BMP280   oTempBarom;
+Adafruit_SHT31    oHumid;
+Adafruit_LIS3MDL  oMagneto;
 
 //power & board color enumerator: blue = 4, green = 3, yellow = 2, orange = 1, red = 0
 int  mnPowerColor = 4;
@@ -182,13 +177,14 @@ bool mbEMRGdirection = false;
 
 
 #define POWER_LED_INTERVAL       30000  //power interval doesn't need to check more than every 30 seconds
+#define BOARD_LED_INTERVAL        5000
 #define ID_LED_INTERVAL           1000
 #define EMRG_LED_INTERVAL          110
 
-#define BOARD_LED_INTERVAL        5000
 #define RGB_SCAN_INTERVAL         5000
 #define MIC_READ_INTERVAL         3000
 #define CLIMATE_SCAN_INTERVAL     2000
+#define MAGNET_READ_INTERVAL      2000
 #define HOME_UPDATE_INTERVAL      1000
 #define BOARD_RED_LED_INTERVAL     350
 #define BOARD_BLUE_LED_INTERVAL    250
@@ -196,14 +192,13 @@ bool mbEMRGdirection = false;
 #define DISPLAY_UPDATE_RATE        100 // 10hz
 #define THERMAL_CAMERA_INTERVAL     50 // twice per display refresh
 #define SERVO_DRAW_INTERVAL         38
+#define BAR_DRAW_INTERVAL            9
+//17 ms is 60fps. setting this to 120fps, at least for initial crawl
 
 int mnLeftLEDCurrent = 0;
 
-bool mbBoardRedLED  = false;
-bool mbBoardBlueLED = false;
-
-//colors range is purple > blue > green > yellow > orange > red > pink > white
-const uint32_t mnIDLEDColorscape[] = {0x8010,0x0010,0x0400,0x7C20,0x8300,0x8000,0x8208,0x7C30};
+                    //colors range is purple > blue > green > yellow > orange > red  > pink > white
+const uint32_t mnIDLEDColorscape[] = {0x8010, 0x0010, 0x0400, 0x7C20,  0x8300,  0x8000,0x8208,0x7C30};
 
 const String marrProfiles[] = {"ALPHA","BETA","GAMMA","DELTA","EPSILON","ZETA","ETA","THETA"};
 //reverse order for these makes the scroller show alpha when
@@ -211,22 +206,23 @@ const String marrProfiles[] = {"ALPHA","BETA","GAMMA","DELTA","EPSILON","ZETA","
 
 const uint16_t mnThermalCameraLabels[] = {0xD6BA,0xC0A3,0xD541,0xD660,0x9E02,0x0458,0x89F1};
 
-//color sensor
 bool color_sensor_initialized = false;
+bool mbTempInitialized        = false;
+bool mbHumidityInitialized    = false;
+bool mbMicrophoneStarted      = false;
+bool Thermal_Camera_Started   = false;
 
 int mnRGBCooldown = 0;
 
 //temperature, humidity, pressure
 //Average sea-level pressure is 1013.25 mbar
-bool mbTempInitialized = false;
-bool mbHumidityInitialized = false;
 
 float mfTempC = 0.0;
 float mfTempK = 0.0;
 float mfHumid = 0.0;
+
 int mnBarom   = 0;
 
-int mnClimateCooldown =  0;
 int mnTempTargetBar   =  0;
 int mnTempCurrentBar  =  0;
 int mnHumidTargetBar  =  0;
@@ -239,18 +235,12 @@ unsigned long mnLastTempBar  = 0;
 unsigned long mnLastBaromBar = 0;
 unsigned long mnLastHumidBar = 0;
 
-//17 ms is 60fps. setting this to 120fps, at least for initial crawl
-#define BAR_DRAW_INTERVAL 9
-
 bool mbHumidBarComplete = false;
 bool mbTempBarComplete = false;
 bool mbBaromBarComplete = false;
 
 int marrScaleNotches[] = {123, 185, 247};
 
-
-unsigned long last_update_home_timestamp = 0;
-bool mbMicrophoneStarted = false;
 bool mbMicrophoneRedraw = false;
 
 extern PDMClass PDM;
@@ -261,9 +251,9 @@ extern PDMClass PDM;
 #define MIC_SAMPLESIZE         256
 //16k is the ONLY SUPPORTED SAMPLE RATE!
 //#define MIC_SAMPLERATE        16000
-#define MIC_AMPLITUDE         1000  // Depending on audio source level, you may need to alter this value. Can be used as a 'sensitivity' control.
-#define DECIMATION              64
-#define FFT_REFERENCELINES      16
+//#define MIC_AMPLITUDE         1000  // Depending on audio source level, you may need to alter this value. Can be used as a 'sensitivity' control.
+//#define DECIMATION              64
+//#define FFT_REFERENCELINES      16
 //#define FFT_MAX                150
 #define FFT_BINCOUNT            16
 #define FFT_BARHEIGHTMAX        64
@@ -271,18 +261,18 @@ extern PDMClass PDM;
 #define GRAPH_OFFSET            10
 #define GRAPH_WIDTH  (tft.width() - 3)
 #define GRAPH_HEIGHT (tft.height() - GRAPH_OFFSET)
-#define GRAPH_MIN    (tft.height() - 2)
-#define GRAPH_MAX    (tft.height() - GRAPH_OFFSET)
+//#define GRAPH_MIN    (tft.height() - 2)
+//#define GRAPH_MAX    (tft.height() - GRAPH_OFFSET)
 
 long MIC_SAMPLERATE = 16000;
-int32_t mnMicVal    =     0;
+//int32_t mnMicVal    =     0;
 
 bool mbMicMaxRefresh = false;
 short mnarrSampleData[MIC_SAMPLESIZE];
 // number of samples read
 volatile int mnSamplesRead = 0;
-double mdarrActual[MIC_SAMPLESIZE];
-double mdarrImaginary[MIC_SAMPLESIZE];
+//double mdarrActual[MIC_SAMPLESIZE];
+//double mdarrImaginary[MIC_SAMPLESIZE];
 int mnMaxDBValue = 0;
 
 // a windowed sinc filter for 44 khz, 64 samples
@@ -293,31 +283,21 @@ unsigned long mnLastMicRead = 0;
 short mCurrentMicDisplay[FFT_BINCOUNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 short mTargetMicDisplay[FFT_BINCOUNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
-//button functionality
-bool mbButton1Flag = false;
-bool mbButton2Flag = false;
-bool mbButton3Flag = false;
-bool mbButton7Flag = false;
-//EasyButton oButton1(BUTTON_1_PIN);
-//EasyButton oButton2(BUTTON_2_PIN);
-//EasyButton oButton3(BUTTON_3_PIN);
-//board button digital pin 7 - use for thermal camera toggle
-//EasyButton oButton7(BUTTON_BOARD);
-
 bool mbSleepMode = false;
 
-Adafruit_LIS3MDL oMagneto;
 bool mbMagnetometer = false;
-float mfMagnetX, mfMagnetY, mfMagnetz;
+//float mfMagnetX, mfMagnetY, mfMagnetz;
 int mnLastMagnetCheck = 0;
-int mnMagnetInterval = 2000;
+
 //if this cutoff is not working, either change where your speaker sits in the shell or add another magnet to your door to force the z-drop
-int mnLastMagnetValue = 0;
+//int mnLastMagnetValue = 0;
 
 //Adafruit_MLX90640 oThermalCamera;
 const uint8_t mbCameraAddress = 0x33;
 paramsMLX90640 moCameraParams;
+
 #define TA_SHIFT 8
+
 //temperature cutoffs are given in celsius. -12C => -10F
 int MIN_CAMERA_TEMP = 20;
 int MAX_CAMERA_TEMP = 35;
@@ -327,7 +307,6 @@ float mfarrTempFrame[768];
 float mfTR = 0.0;
 float mfTA = 0.0;
 float mfCameraEmissivity = 0.95;
-bool Thermal_Camera_Started = false;
 
 //this interval caps draw and thermal data frame rates. camera data will run slower than 30fps, but this throttle is needed to allow button press event polling
 //50ms -> 20fps cap
@@ -335,8 +314,8 @@ bool Thermal_Camera_Started = false;
 //this scales display window to 256 x 192, a border of 24px all around
 // if thermal camera is rotated 90 degrees, can change thermal to square viewport
 // portrait hardware could be overall benefit, with viewport 216x216 (24*9)
-uint16_t mnThermalPixelWidth = (THERMAL_CAMERA_PORTRAIT == 1) ? 9 : 8;
-uint16_t mnThermalPixelHeight = (THERMAL_CAMERA_PORTRAIT == 1) ? 9 : 8;
+uint16_t mnThermalPixelWidth  = (THERMAL_CAMERA_PORTRAIT == 1) ?  9 :  8;
+uint16_t mnThermalPixelHeight = (THERMAL_CAMERA_PORTRAIT == 1) ?  9 :  8;
 uint8_t mnCameraDisplayStartX = (THERMAL_CAMERA_PORTRAIT == 1) ? 52 : 32;
 uint8_t mnCameraDisplayStartY = (THERMAL_CAMERA_PORTRAIT == 1) ? 12 : 24;
 //uint8_t mnCameraDisplayStartY = 0;
@@ -364,10 +343,6 @@ const uint16_t mnarrThermalDisplayColors[] = {0x480F, 0x400F,0x400F,0x400F,0x401
 ,0xF841,0xF8A2,0xF8E3,0xF945,0xF986,0xF9E7,0xFA28,0xFA8A,0xFACB,0xFB2C,0xFB6D,0xFBCF,0xFC10,0xFC71,0xFCB2,0xFD14,0xFD55,0xFDB6,0xFDF7,0xFD59
 ,0xFE9A,0xFEFB,0xFF3C,0xFF9E};
 
-unsigned long mnButton2Press = 0;
-unsigned long mnButton3Press = 0;
-
-int mnServoButtonWindow = 1500;
 //graphs should take 3 seconds for full draw cycle-> 3000 / 80 lines
 
 unsigned long mnServoLastDraw = 0;
@@ -379,7 +354,7 @@ const uint8_t mnarrServoGraphData[] = {3,7,10,12,13,14,14,14,13,12,10,7,4,4,6,8,
                   12,10,8,7,6,4,3,2,2,2,3,4,6,8,9,11,12,12,12,11,10,9,7,5,3,3,3,5,7,10,
                   11,11,12,12,12,11,11,10,9,9,9,8,8,8,8,7,6,5,5,5,5,4,3,2,2,2};
 
-typedef enum
+enum
 {
   HOME_NEOPIXEL_PATTERN = 0,
   GEO_NEO_PIXEL_PATTERN,
@@ -390,15 +365,15 @@ typedef enum
   OFF_NEO_PIXEL_PATTERN,
 };
 
-typedef enum
+enum
 {
   TEMP_CLIMATE_BARGRAPH = 0,
   HUMID_CLIMATE_BARGRAPH,
   BAROM_CLIMATE_BARGRAPH,
 };
 
-
-void setup() {
+void setup() 
+{
   //NRF_UICR->NFCPINS = 0;
   ledPwrStrip.begin();
   ledBoard.begin();
@@ -424,7 +399,7 @@ void setup() {
   pinMode(SCAN_LED_PIN_4, OUTPUT);
 
   //set output for board non-neopixel LEDs
-  pinMode(LED_RED, OUTPUT);
+  pinMode(LED_RED,  OUTPUT);
   pinMode(LED_BLUE, OUTPUT);
 
   pinMode(SOUND_TRIGGER_PIN, OUTPUT);
@@ -440,7 +415,6 @@ void setup() {
   enable_input_switches();
 
   pinMode(VOLT_PIN, INPUT);
-  pinMode(BUTTON_BOARD, INPUT);
 
   //initialize color sensor, show error if unavailable. sensor hard-coded name is "ADPS"
   //begin will return false if initialize failed.
@@ -588,7 +562,7 @@ void oldloop() {
 
   //need tests with speaker above and door magnet below - may require testing within assembled shell
   #if !defined(MAGNET_DEBUG)
-    if ((millis() - mnLastMagnetCheck) > mnMagnetInterval) {
+    if ((millis() - mnLastMagnetCheck) > MAGNET_READ_INTERVAL) {
       oMagneto.read();
       //magnet function modification needs to use a massive drop as the sleep trigger.
       int nCurrentMagnetZ = oMagneto.y;
@@ -709,26 +683,21 @@ void SleepMode() {
 
   //reset all "status" variables
   mnRGBCooldown = 0;
-  mnClimateCooldown = 0;
   
   mnCurrentServoGraphPoint = 0;
   mnServoLastDraw = 0;
   
   SetActiveNeoPixelButton(OFF_NEO_PIXEL_PATTERN);
 
-  mbButton1Flag = false;
-  mbButton2Flag = false;
-  mbButton3Flag = false;
-
   //reset any bar graph values from climate
-  mnTempTargetBar = 0;
-  mnTempCurrentBar = 0;
-  mnHumidTargetBar = 0;
+  mnTempTargetBar   = 0;
+  mnTempCurrentBar  = 0;
+  mnHumidTargetBar  = 0;
   mnHumidCurrentBar = 0;
-  mnBaromTargetBar = 0;
+  mnBaromTargetBar  = 0;
   mnBaromCurrentBar = 0;
   mbHumidBarComplete = false;
-  mbTempBarComplete = false;
+  mbTempBarComplete  = false;
   mbBaromBarComplete = false;
 }
 
@@ -745,11 +714,13 @@ void ActiveMode() {
   set_software_state(MAIN_SCREEN); //home
 }
 
-void ActivateSound() {
+void ActivateSound() 
+{
   digitalWrite(SOUND_TRIGGER_PIN, LOW);
 }
 
-void DisableSound() {
+void DisableSound() 
+{
   digitalWrite(SOUND_TRIGGER_PIN, HIGH);
 }
 
@@ -953,6 +924,8 @@ void RunBoardLEDs()
 {
   static unsigned long mnLastUpdateBoardRedLED = 0;
   static unsigned long mnLastUpdateBoardBlueLED = 0;
+  static bool mbBoardRedLED  = false;
+  static bool mbBoardBlueLED = false;
   unsigned long current_time = millis();
 
   if ((current_time - mnLastUpdateBoardRedLED) > BOARD_RED_LED_INTERVAL) 
@@ -1087,7 +1060,6 @@ void reset_drawing_globals()
 
   //reset any previous sensor statuses
   mnRGBCooldown     = 0; //reset any rgb sensor values
-  mnClimateCooldown = 0;
 
   mnCurrentServoGraphPoint = 0;
   mnCurrentServoGraphPoint = 0;
@@ -1317,7 +1289,7 @@ void RunHome()
 
   //raw magnet z index data output to home screen for debug
   #if defined(MAGNET_DEBUG)
-  if (mbMagnetometer && ((nNowMillis - mnLastMagnetCheck) > mnMagnetInterval)) {
+  if (mbMagnetometer && ((nNowMillis - mnLastMagnetCheck) > MAGNET_READ_INTERVAL)) {
     oMagneto.read();
     //output raw data to screen - test this with magnet behind 4mm of PLA ~
     //drawParamText(250, 25, (String)oMagneto.x, color_MAINTEXT);
@@ -1587,7 +1559,7 @@ uint8_t GetBatteryPercent() {
   // for this reason, if you use 3.3 with a newer version of firmware, batt % will show 60 when it should be 100
   //fBattV *= 3.6;
   //combine previous actions for brevity- multiply by 2 to adjust for resistor, then 3.3 reference voltage
-  fBattV *= 7.2;
+  fBattV *= 7.2; // 2 * 3.6 = 7.2
   fBattV /= 1024; // convert to voltage
   //3.2 to 4.2 => subtract 3.2 (0) from current voltage. now values should be in range of 0-0.9 : multiply by 1.111, then by 100, convert result to int.
   //fBattV -= 3.2;
@@ -2099,7 +2071,7 @@ void display_hidden_thermal_screen()
         nTempY = nTempY + 5;
       }
       //draw both rectangles of same color, 1 for each side, since Y coord already calculated
-      tft.fillRect(6, nTempY, 4, (j == 3 ? 26 : 21), mnThermalCameraLabels[j]);
+      tft.fillRect(  6, nTempY, 4, (j == 3 ? 26 : 21), mnThermalCameraLabels[j]);
       tft.fillRect(310, nTempY, 4, (j == 3 ? 26 : 21), mnThermalCameraLabels[j]);
     }
   }

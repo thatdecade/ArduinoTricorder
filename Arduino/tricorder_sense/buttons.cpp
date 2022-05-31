@@ -9,6 +9,10 @@
 
 
 // BE ADVISED
+
+// buttons, scroller - d2 pin supposed to be pin #2
+// button on the board is connected to pin 7.  TX is pin 0, RX is pin 1 - these are normally used for serial communication
+
 // adafruit defines physically labeled pin D2 as pin 2 in its header file, but it does not respond when set as an input by default.
 // you will need to modify system_nrf52840.c file by adding
 // #define CONFIG_NFCT_PINS_AS_GPIOS (1)
@@ -18,7 +22,7 @@
 #define GEO_BUTTON_1_PIN        (1) //PIN_SERIAL1_RX - GEO
 #define MET_BUTTON_2_PIN        (0) //PIN_SERIAL1_TX - MET
 #define BIO_BUTTON_3_PIN        (2) //PIN_NFC2 - BIO
-#define CAM_BUTTON_BOARD        (7) //PIN_BUTTON1 - CAMERA
+#define CAM_BUTTON_BOARD        (7) //PIN_BUTTON1 - CAMERA / Board Button
 
 byte pinMap_buttons[NUMBER_OF_BUTTONS] =
 {
