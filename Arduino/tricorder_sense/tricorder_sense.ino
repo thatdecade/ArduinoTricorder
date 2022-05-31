@@ -557,7 +557,7 @@ void check_for_sleep()
   //need tests with speaker above and door magnet below - may require testing within assembled shell
 #ifndef MAGNET_DEBUG
     if ( ( magnet_sensor_initialized ) && 
-         ( (nNowMillis - mnLastMagnetCheck) > MAGNET_READ_INTERVAL ) ) 
+         ( (millis() - mnLastMagnetCheck) > MAGNET_READ_INTERVAL ) ) 
     {
       mnLastMagnetCheck = millis();
       oMagneto.read();
