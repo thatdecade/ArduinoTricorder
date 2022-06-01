@@ -459,6 +459,12 @@ void setup()
 
   // use this initializer for a 2.0" 320x240 TFT. technically this is a rotated 240x320, so declaration is in that order
   tft.init(240, 320, SPI_MODE0); // Init ST7789 320x240 with SPI Mode of Data Capture on Rising edge
+  
+  // SPI speed defaults to SPI_DEFAULT_FREQ 32000000 defined in the library, you can override it here
+  // Note that speed allowable depends on chip and quality of wiring, if you go too fast, you
+  // may end up with a black screen some times, or all the time.
+  //tft.setSPISpeed(40000000);
+      
   tft.setRotation(1);
   tft.setFont(&lcars11pt7b);
   //these goggles, they do nothing!

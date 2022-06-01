@@ -346,7 +346,7 @@ module control_panel_face_body(cut_only=false)
     
     //LED Light Shield
     vertical_leds(type="shield");
-    horizontal_button_pcb_holder(show_pcb=false);
+    //horizontal_button_pcb_holder(show_pcb=true);
 }
 
 module upper_control_panel_face_body()
