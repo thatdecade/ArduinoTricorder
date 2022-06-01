@@ -225,13 +225,14 @@ uint32_t neoPixelOrange = ledPwrStrip.Color( 128,  96,   0);
 uint32_t neoPixelRed    = ledPwrStrip.Color( 128,   0,   0);
 uint32_t neoPixelWhite  = ledPwrStrip.Color( 255, 255, 255);
 
-// do not fuck with this. 2.0 IS THE BOARD - this call uses hardware SPI
+// do not fuck with this. 2.0" IS THE BOARD - this call uses hardware SPI
 Adafruit_ST7789   tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 //create sensor objects
 Adafruit_APDS9960 oColorSensor;
 Adafruit_BMP280   oTempBarom;
 Adafruit_SHT31    oHumid;
 Adafruit_LIS3MDL  oMagneto;
+paramsMLX90640    moCameraParams;
 
 enum
 {
@@ -373,7 +374,6 @@ short mTargetMicDisplay[FFT_BINCOUNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 //Adafruit_MLX90640 oThermalCamera;
 const uint8_t mbCameraAddress = 0x33;
-paramsMLX90640 moCameraParams;
 
 #define TA_SHIFT 8
 
@@ -458,7 +458,7 @@ void setup()
   ledBoard.begin();
 
   // use this initializer for a 2.0" 320x240 TFT. technically this is a rotated 240x320, so declaration is in that order
-  tft.init(240, 320, SPI_MODE0); // Init ST7789 320x240
+  tft.init(240, 320, SPI_MODE0); // Init ST7789 320x240 with SPI Mode of Data Capture on Rising edge
   tft.setRotation(1);
   tft.setFont(&lcars11pt7b);
   //these goggles, they do nothing!
@@ -1250,6 +1250,9 @@ void reset_drawing_globals()
 
 void display_home_screen()
 {
+  //bitmap draw takes about 3x the time that the shapes take?
+  //tft.drawBitmap(0, 0, bitmap_main_screen, 320, 240, color_SWOOP);
+
   // home screen header is 2 rounded rectangles, lines to cut them, 1 black rect as backing for header text
   //fillRoundRect(x,y,width,height,cornerRadius, color)
   //top and bottom borders
@@ -1490,16 +1493,17 @@ void SetThermalClock() {
 
 void display_RGB_screen()
 {
+  tft.fillScreen(ST77XX_BLACK);
+  //tft.drawBitmap(0, 0, bitmap_rgb_screen, 320, 240, color_SWOOP);
+
   if (!color_sensor_initialized)
   {
-    tft.fillScreen(ST77XX_BLACK);
     drawParamText(211,  21, "CHROMATICS",     color_TITLETEXT);
     drawParamText(110, 169, "SENSOR OFFLINE", color_MAINTEXT);
   }
   else
   {
     //load rgb scanner screen - this is done once to improve perf
-    tft.fillScreen(ST77XX_BLACK);
     tft.fillRoundRect(0, -25, 100, 140, 25, color_SWOOP);
     tft.fillRoundRect(0, 120, 100, 140, 25, color_SWOOP);
     tft.drawFastHLine(24, 112, 296, color_SWOOP);
