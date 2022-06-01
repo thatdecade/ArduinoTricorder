@@ -8,17 +8,6 @@
 #include "buttons.h"
 
 
-// BE ADVISED
-
-// buttons, scroller - d2 pin supposed to be pin #2
-// button on the board is connected to pin 7.  TX is pin 0, RX is pin 1 - these are normally used for serial communication
-
-// adafruit defines physically labeled pin D2 as pin 2 in its header file, but it does not respond when set as an input by default.
-// you will need to modify system_nrf52840.c file by adding
-// #define CONFIG_NFCT_PINS_AS_GPIOS (1)
-// YOU WILL SEE THIS CONSTANT REFERENCED IN THAT FILE, with compiler-conditional logic around it to actually free up the NFC pins, 
-// but only if that constant exists in that file
-
 #define GEO_BUTTON_1_PIN        (11) // GEO
 #define MET_BUTTON_2_PIN        (12) // MET
 #define BIO_BUTTON_3_PIN        (13) // BIO
