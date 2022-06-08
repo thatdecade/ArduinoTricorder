@@ -1295,7 +1295,7 @@ This footprint was designed to help hold the alignment of a through-hole compone
 <label x="38.1" y="134.62" size="1.778" layer="95"/>
 </segment>
 </net>
-<net name="GEO" class="0">
+<net name="GEO_BUTTON" class="0">
 <segment>
 <pinref part="J1" gate="J1" pin="6"/>
 <wire x1="35.56" y1="147.32" x2="45.72" y2="147.32" width="0.1524" layer="91"/>
@@ -1307,7 +1307,7 @@ This footprint was designed to help hold the alignment of a through-hole compone
 <pinref part="S1" gate="G$1" pin="1"/>
 </segment>
 </net>
-<net name="MET" class="0">
+<net name="MET_BUTTON" class="0">
 <segment>
 <pinref part="J1" gate="J1" pin="5"/>
 <wire x1="35.56" y1="144.78" x2="45.72" y2="144.78" width="0.1524" layer="91"/>
@@ -1319,7 +1319,7 @@ This footprint was designed to help hold the alignment of a through-hole compone
 <pinref part="S2" gate="G$1" pin="1"/>
 </segment>
 </net>
-<net name="BIO" class="0">
+<net name="BIO_BUTTON" class="0">
 <segment>
 <pinref part="J1" gate="J1" pin="4"/>
 <wire x1="35.56" y1="142.24" x2="45.72" y2="142.24" width="0.1524" layer="91"/>
