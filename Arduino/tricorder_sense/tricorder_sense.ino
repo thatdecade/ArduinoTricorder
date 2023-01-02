@@ -171,6 +171,7 @@ typedef enum
 //-10000 is based on the analog resolution required by battery pin (-32768 to 32768 range)
 //this is intended for the z index reading of magnetometer (negative means field is below the board)
 #define mnMagnetSleepThreshold -10000
+#define mnMagnetAproachingThreshold 0
 
 #if UX_THEME == 0
   // TNG colors here
@@ -286,7 +287,7 @@ bool mbEMRGdirection = false;
 #define RGB_SCAN_INTERVAL         5000
 #define MIC_READ_INTERVAL         3000
 #define CLIMATE_SCAN_INTERVAL     2000
-#define MAGNET_READ_INTERVAL      2000
+#define MAGNET_READ_INTERVAL      1000
 #define HOME_UPDATE_INTERVAL      1000
 #define BOARD_RED_LED_INTERVAL     350
 #define BOARD_BLUE_LED_INTERVAL    250
@@ -658,10 +659,12 @@ void process_schedule()
   }
 }
 
+
 void check_for_sleep() 
 {
   static unsigned long mnLastMagnetCheck = 0;
   int nCurrentMagnetZ = 0;
+  static int nLastMagnetZ = 0;
 
   //if magnet read in Z direction is over a threshold, trigger sleep.
   //use MAGNET_DEBUG to check this first in the loop, as everything else depends on it
@@ -669,8 +672,18 @@ void check_for_sleep()
   //use z > 5000 ?
   //all analogRead actions depend on resolution setting - changing this will screw with battery % readings
 
-  if ( (millis() - mnLastMagnetCheck) > MAGNET_READ_INTERVAL )
+  //read at set 1Hz interval
+  // if magnet is sensed approaching then update at 10Hz
+  if ( ((millis() - mnLastMagnetCheck) > MAGNET_READ_INTERVAL ) ||
+       ( (nLastMagnetZ < mnMagnetAproachingThreshold ) && ((millis() - mnLastMagnetCheck) > 100 ))
+     )
   {
+#if defined(DEBUGSERIAL) && defined(DEBUGMAGNET)
+      Serial.print("Last Magnet Value: ");
+      Serial.print(nLastMagnetZ);
+      Serial.print(" < Threshold: ");
+      Serial.println((mnMagnetAproachingThreshold));
+#endif
 #ifndef MAGNET_DEBUG
     if (magnet_sensor_initialized) 
     {
@@ -720,6 +733,9 @@ void check_for_sleep()
         set_software_state(INITILIZATION);
       }
     }
+    
+    //magnet was read, update last
+    nLastMagnetZ = nCurrentMagnetZ;
   }
 }
 
