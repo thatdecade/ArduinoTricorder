@@ -41,10 +41,15 @@ void process_menu_selection()
   {
     current_button_state = get_button_state(i);
     
-    if(current_button_state == WAS_RELEASED)
+    if(current_button_state == WAS_RELEASED) // WAS_RELEASED = 2
     {
         //CLICKED ACTION
 
+  Serial.print("Button ");
+  Serial.print(i);
+  Serial.print(" is ");
+  Serial.println(current_button_state);
+  
         //Note: action taken on WAS_RELEASED instead of IS_PRESSED to prevent extra clicks during button holds
 
         last_menu_interaction_timestamp[i] = millis();
@@ -52,11 +57,14 @@ void process_menu_selection()
         if(last_mode_button_state[i] == NOT_PROCESSED)
         {
             //one action per press / hold
-            for( byte j = 0; i < NUMBER_OF_BUTTONS; i++)
+            for( byte j = 0; j < NUMBER_OF_BUTTONS; j++)
             {
-              last_mode_button_state[i] = PROCESSED;
+              last_mode_button_state[j] = PROCESSED;
             }
             
+  Serial.print("Button Clicked ");
+  Serial.println(i);
+  
             button_clicked(i);
         }
     }
@@ -100,6 +108,7 @@ void process_menu_selection()
 
 void button_clicked(byte button)
 {      
+      
   // call clicked action handler
   switch(button)
   {
@@ -290,6 +299,9 @@ void set_software_state(uint8_t new_state)
       //do nothing
       break;
   }
+
+  Serial.print("Set state to ");
+  Serial.println(software_state);
 }
 
 uint8_t get_software_state()

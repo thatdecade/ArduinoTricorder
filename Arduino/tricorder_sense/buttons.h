@@ -14,7 +14,7 @@
 
 typedef enum
 {
-  IS_NOT_PRESSED,
+  IS_NOT_PRESSED = 0,
   IS_PRESSED,
   WAS_RELEASED,
   IS_HELD,

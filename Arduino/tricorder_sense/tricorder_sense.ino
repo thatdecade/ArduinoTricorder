@@ -18,6 +18,14 @@
 #include "menu_navigation.h"
 #include "sleep_timer.h"
 
+#if defined(USE_TINYUSB)
+#include <Adafruit_TinyUSB.h> // for Serial
+#endif
+
+
+#define DEBUGSERIAL 1
+#define DEBUGMAGNET 1
+
 /*
  Full arduino pinout for this board is here:
  https://github.com/adafruit/Adafruit_nRF52_Arduino/blob/master/variants/feather_nrf52840_sense/variant.h
@@ -50,9 +58,9 @@
    MO   MOSI     TFT
    A6   Input    VOLTAGE_MONITOR 
    A0   Input    Scroll Wheel (Library)
-  D11   Input    GEO Button (Left)
-  D12   Input    MET Button (Center)
-  D13   Input    BIO Button (Right)
+   D2   Input    GEO Button (Left)
+   TX   Input    MET Button (Center)
+   RX   Input    BIO Button (Right)
    D7   Input    Board Button (Camera)
   D10   Data     Cover NeoPixels (PWR, ID, EMRG)
    D8   Data     Board NeoPixels (Front Camera Flash)
@@ -64,8 +72,8 @@
   D13   Output   Board Red LED
    D4   Output   Board Blue LED
    A1   IRQ      Lightning Detector
-  SCL   I2C      Thremal Camera / Lightning Detector
-  SDA   I2C      Thremal Camera / Lightning Detector
+  SCL   I2C      Thermal Camera / Lightning Detector
+  SDA   I2C      Thermal Camera / Lightning Detector
   En    VREG     Enable Power Switch (Short to Ground for OFF)    
   
   If you run out of pins, consider moving the buttons and wheel to an Adafruit Joy Featherwing or other GPIO expander.
@@ -122,7 +130,7 @@
 //neopixel power LED. must use an unreserved pin for this.  PWR, ID, EMRG all use this pin
 #define NEOPIXEL_CHAIN_DATAPIN  (10)
 #define NEOPIXEL_BRIGHTNESS     (64)
-#define NEOPIXEL_LED_COUNT       (6)
+
 // built-in pins: D4 = blue conn LED, 8 = neopixel on board, D13 = red LED next to micro usb port
 // commented out lines are pre-defined by the adafruit board firmware
 #define NEOPIXEL_BOARD_LED_PIN   (8)
@@ -133,13 +141,18 @@
 //#define LED_BLUE             4
 
 //ledPwrStrip - cover pixels
-#define PWR_PIXEL_POSITION   1
-#define ID_PIXEL_POSITION    2
-#define EMRG_PIXEL_POSITION  3
-//ledPwrStrip - control panel pixels
-#define GEO_PIXEL_POSITION   4
-#define MET_PIXEL_POSITION   5
-#define BIO_PIXEL_POSITION   6
+typedef enum
+{ //re-arrange as need based on your wiring
+  PWR_PIXEL_POSITION = 0, // POWER LED
+  GEO_PIXEL_POSITION,     // BUTTON LED
+  MET_PIXEL_POSITION,     // BUTTON LED
+  BIO_PIXEL_POSITION,     // BUTTON LED
+  ID_PIXEL_POSITION,      // DOOR LED
+  EMRG_PIXEL_POSITION,    // DOOR LED
+
+  POWERSTRIP_LED_COUNT, //must be last
+} strip_led_positions;
+
 //ledBoard - front pixels
 #define BOARD_PIXEL_POSITION 0
 
@@ -155,9 +168,9 @@
 //#define MAGNET_DEBUG
 
 //the -700 threshold was based on resolution of 10, or 1024 max
-//-20000 is based on the analog resolution required by battery pin (-32768 to 32768 range)
+//-10000 is based on the analog resolution required by battery pin (-32768 to 32768 range)
 //this is intended for the z index reading of magnetometer (negative means field is below the board)
-int mnMagnetSleepThreshold = -28000;
+#define mnMagnetSleepThreshold -10000
 
 #if UX_THEME == 0
   // TNG colors here
@@ -214,7 +227,7 @@ int mnMagnetSleepThreshold = -28000;
 
 #define RGBto565(r,g,b) ((((r) & 0xF8) << 8) | (((g) & 0xFC) << 3) | ((b) >> 3))
 
-Adafruit_NeoPixel ledPwrStrip(NEOPIXEL_LED_COUNT, NEOPIXEL_CHAIN_DATAPIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel ledPwrStrip(POWERSTRIP_LED_COUNT, NEOPIXEL_CHAIN_DATAPIN, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel ledBoard(1, NEOPIXEL_BOARD_LED_PIN, NEO_GRB + NEO_KHZ800);
 
 uint32_t neoPixelBlack  = ledPwrStrip.Color(   0,   0,   0);
@@ -238,6 +251,13 @@ enum
 {
   COLOR_BLINK_PATTERN = 0,
   DISPLAY_BATTERY_HEALTH,
+  HOME_NEOPIXEL_PATTERN,
+  GEO_CLIMATE_NEO_PIXEL_PATTERN,
+  MET_RGB_NEO_PIXEL_PATTERN,
+  BIO_MICROPHONE_NEO_PIXEL_PATTERN,
+  CAM_THERMAL_NEO_PIXEL_PATTERN,
+  TOM_SERVO_NEO_PIXEL_PATTERN,
+  OFF_NEO_PIXEL_PATTERN,
 };
 
 byte strip_pixel_animation = COLOR_BLINK_PATTERN;
@@ -435,17 +455,6 @@ const uint8_t mnarrServoGraphData[] = {3,7,10,12,13,14,14,14,13,12,10,7,4,4,6,8,
 
 enum
 {
-  HOME_NEOPIXEL_PATTERN = 0,
-  GEO_CLIMATE_NEO_PIXEL_PATTERN,
-  MET_RGB_NEO_PIXEL_PATTERN,
-  BIO_MICROPHONE_NEO_PIXEL_PATTERN,
-  CAM_THERMAL_NEO_PIXEL_PATTERN,
-  TOM_SERVO_NEO_PIXEL_PATTERN,
-  OFF_NEO_PIXEL_PATTERN,
-};
-
-enum
-{
   TEMP_CLIMATE_BARGRAPH = 0,
   HUMID_CLIMATE_BARGRAPH,
   BAROM_CLIMATE_BARGRAPH,
@@ -453,6 +462,10 @@ enum
 
 void setup() 
 {
+#ifdef DEBUGSERIAL
+  Serial.begin(115200);
+#endif
+
   //NRF_UICR->NFCPINS = 0;
   ledPwrStrip.begin();
   ledBoard.begin();
@@ -578,6 +591,11 @@ void setup()
   //analogReadResolution(10);
   //GoHome();
   set_software_state(MAIN_SCREEN);
+
+#ifdef DEBUGSERIAL
+  Serial.println("ArduinoTricorder v1.0");
+  Serial.println("Setup Complete");
+#endif
 }
 
 
@@ -616,6 +634,9 @@ void process_schedule()
     update_menu_displayed();
     update_neopixel_pattern();
     update_sound();
+    update_button_lights();
+    update_pixel_animation_pattern();
+    RunNeoPixelColor(true) ;
     
     //save last_state at end. Allows smooth init->main transition
     last_state = current_state;
@@ -628,10 +649,13 @@ void process_schedule()
     refresh_display_data();
   }
 
-  //update neopixels
-  RunNeoPixelColor(false);
-  RunLeftScanner();
-  RunBoardLEDs();
+  if(SYSTEM_NO_CHANGE_MODES < current_state)
+  {
+    //update neopixels
+    RunNeoPixelColor(false);
+    RunLeftScanner();
+    RunBoardLEDs();
+  }
 }
 
 void check_for_sleep() 
@@ -659,6 +683,15 @@ void check_for_sleep()
     }
 #endif
     
+#if defined(DEBUGSERIAL) && defined(DEBUGMAGNET)
+      Serial.print("Sleep timer: ");
+      Serial.println(check_sleep_timer());
+      Serial.print("Magnet Value: ");
+      Serial.print(nCurrentMagnetZ);
+      Serial.print(" < Threshold: ");
+      Serial.println(mnMagnetSleepThreshold);
+#endif
+
     // go to sleep if:
     // - no button interaction for 10 minutes
     // - door is closed 
@@ -667,14 +700,106 @@ void check_for_sleep()
     {
       if (get_software_state() > SYSTEM_NO_CHANGE_MODES)
       {
+#ifdef DEBUGSERIAL
+        Serial.println("Going to sleep");
+#endif
         //if not already sleeping, send to sleep
         set_software_state(GO_TO_SLEEP);
       }
     }
     else
+    // - button interaction in the last 10 minutes
+    // - door is open 
     {
-      set_software_state(INITILIZATION);
+      if(get_software_state() < SYSTEM_NO_CHANGE_MODES)
+      {
+#ifdef DEBUGSERIAL
+        Serial.println("Wake up");
+#endif
+        //only go to init if we were sleeping
+        set_software_state(INITILIZATION);
+      }
     }
+  }
+}
+
+void update_pixel_animation_pattern()
+{
+  switch(get_software_state())
+  {
+    case GO_TO_SLEEP:
+    case SLEEPING:
+    case INITILIZATION:
+    case RGB_SCREEN:
+      strip_pixel_animation = OFF_NEO_PIXEL_PATTERN;
+      board_pixel_animation = OFF_NEO_PIXEL_PATTERN;
+      break;
+    case MAIN_SCREEN:
+    case CLIMATE_SCREEN:
+    case MICROPHONE_SCREEN:
+    case BATTERY_SCREEN:
+      strip_pixel_animation = COLOR_BLINK_PATTERN;
+      board_pixel_animation = COLOR_BLINK_PATTERN;
+      break;
+    case HIDDEN_THERMAL_SCREEN:
+      strip_pixel_animation = CAM_THERMAL_NEO_PIXEL_PATTERN;
+      board_pixel_animation = CAM_THERMAL_NEO_PIXEL_PATTERN;
+      break;
+    case HIDDEN_TOM_SERVO_SCREEN:
+      strip_pixel_animation = TOM_SERVO_NEO_PIXEL_PATTERN;
+      board_pixel_animation = TOM_SERVO_NEO_PIXEL_PATTERN;
+      break;
+    case HIDDEN_LIGHTING_DETECTOR_SCREEN:
+      //TBD
+      break;
+    default:
+      //SLEEPING
+      break;
+  }
+}
+
+void update_button_lights() 
+{
+  switch(get_software_state())
+  {
+    case GO_TO_SLEEP:
+    case SLEEPING:
+    case INITILIZATION:
+      ledPwrStrip.setPixelColor(GEO_PIXEL_POSITION, neoPixelBlack);
+      ledPwrStrip.setPixelColor(MET_PIXEL_POSITION, neoPixelBlack);
+      ledPwrStrip.setPixelColor(BIO_PIXEL_POSITION, neoPixelBlack);
+      break;
+    case MAIN_SCREEN:
+      ledPwrStrip.setPixelColor(GEO_PIXEL_POSITION, neoPixelBlack);
+      ledPwrStrip.setPixelColor(MET_PIXEL_POSITION, neoPixelGreen);
+      ledPwrStrip.setPixelColor(BIO_PIXEL_POSITION, neoPixelBlack);
+      break;
+    case RGB_SCREEN:
+      ledPwrStrip.setPixelColor(GEO_PIXEL_POSITION, neoPixelRed);
+      ledPwrStrip.setPixelColor(MET_PIXEL_POSITION, neoPixelBlue);
+      ledPwrStrip.setPixelColor(BIO_PIXEL_POSITION, neoPixelGreen);
+      break;
+    case CLIMATE_SCREEN:
+      ledPwrStrip.setPixelColor(GEO_PIXEL_POSITION, neoPixelGreen);
+      ledPwrStrip.setPixelColor(MET_PIXEL_POSITION, neoPixelBlack);
+      ledPwrStrip.setPixelColor(BIO_PIXEL_POSITION, neoPixelBlack);
+      break;
+    case MICROPHONE_SCREEN:
+      ledPwrStrip.setPixelColor(GEO_PIXEL_POSITION, neoPixelBlack);
+      ledPwrStrip.setPixelColor(MET_PIXEL_POSITION, neoPixelBlack);
+      ledPwrStrip.setPixelColor(BIO_PIXEL_POSITION, neoPixelGreen);
+      break;
+    case BATTERY_SCREEN:
+      break;
+    case HIDDEN_THERMAL_SCREEN:
+      break;
+    case HIDDEN_TOM_SERVO_SCREEN:
+      break;
+    case HIDDEN_LIGHTING_DETECTOR_SCREEN:
+      break;
+    default:
+      //SLEEPING
+      break;
   }
 }
 
@@ -704,15 +829,18 @@ void update_menu_displayed()
       break;
     case BATTERY_SCREEN:
       //TBD
+      set_software_state(MAIN_SCREEN); //go home on unused menu
       break;
     case HIDDEN_THERMAL_SCREEN:
       display_hidden_thermal_screen();
       break;
     case HIDDEN_TOM_SERVO_SCREEN:
       //ActivateTomServo();
+      set_software_state(MAIN_SCREEN); //go home on unused menu
       break;
     case HIDDEN_LIGHTING_DETECTOR_SCREEN:
       //TBD
+      set_software_state(MAIN_SCREEN); //go home on unused menu
       break;
     default:
       //SLEEPING
@@ -748,7 +876,7 @@ void refresh_display_data()
     case HIDDEN_LIGHTING_DETECTOR_SCREEN:
       //TBD
       break;
-    default:
+    default: //SLEEP
       break;
   }
 }
@@ -760,6 +888,7 @@ void update_neopixel_pattern()
   switch(get_software_state())
   {
     case GO_TO_SLEEP:
+    case SLEEPING:
       SetActiveNeoPixelButton(OFF_NEO_PIXEL_PATTERN);
       break;
     case MAIN_SCREEN:
@@ -905,6 +1034,8 @@ void RunNeoPixelColor(bool force_update)
   
   uint16_t nScrollerValue;
   uint16_t nTempColor;
+
+  uint8_t software_state = get_software_state();
   
   if(force_update)
   {
@@ -913,139 +1044,153 @@ void RunNeoPixelColor(bool force_update)
     mnLastUpdateEMRG  = 0;
     mnLastUpdateIDLED = 0;
   }
-  
-  if ( (force_update) || 
-       ((current_time - mnLastUpdatePower) > POWER_LED_INTERVAL)) 
-  {
-    mnLastUpdatePower = current_time;
-    
-    if (strip_pixel_animation == COLOR_BLINK_PATTERN) 
-    {
-      switch (next_PWR_color) 
-      {
-        case 4:  ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelBlue);   next_PWR_color = 3; break;
-        case 3:  ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelGreen);  next_PWR_color = 2; break;
-        case 2:  ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelYellow); next_PWR_color = 1; break;
-        case 1:  ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelOrange); next_PWR_color = 0; break;
-        default: ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelRed);    next_PWR_color = 4; break;
-      }
-    }
-    else // board_pixel_animation == DISPLAY_BATTERY_HEALTH
-    {
-      int nBattMap = GetBatteryTier(); //returns 0-4
-      switch (nBattMap)
-      {
-        case 4:  ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelBlue);   break;
-        case 3:  ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelGreen);  break;
-        case 2:  ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelYellow); break;
-        case 1:  ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelOrange); break;
-        default: ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelRed);    break;
-      }
-    } //end if powercolorCycle
 
+  if(strip_pixel_animation == OFF_NEO_PIXEL_PATTERN)
+  {
+    ledPwrStrip.clear();
     ledPwrStrip.show();
   }
-
-  //need to push ID LED separate from power, as PWR only updates every 30 seconds
-  if ( (force_update) || 
-       ((current_time - mnLastUpdateIDLED) > ID_LED_INTERVAL) ) 
+  else
   {
-    mnLastUpdateIDLED = current_time;
-    
-    //set ID LED color based on value pulled from A0, middle prong of scroll potentiometer
-    //colors range is purple > blue > green > yellow > orange > red > pink > white
-    nScrollerValue = analogRead(PIN_SCROLL_INPUT);
-    nTempColor = map(nScrollerValue, 0, 1023, 0, NUMBER_ID_COLORS-1);
-    
-    msCurrentProfileName = marrProfiles[nTempColor];
-
-    //calling uint16 parameter function for set color was not working. converting uint16 to rgb
-    mnCurrentProfileRed   = ((((mnIDLEDColorscape[nTempColor] >> 11) & 0x1F) * 527) + 23) >> 6;
-    mnCurrentProfileGreen = ((((mnIDLEDColorscape[nTempColor] >>  5) & 0x3F) * 259) + 33) >> 6;
-    mnCurrentProfileBlue  = (((mnIDLEDColorscape[nTempColor]         & 0x1F) * 527) + 23) >> 6;
-    
-    ledPwrStrip.setPixelColor(ID_PIXEL_POSITION, mnCurrentProfileRed, mnCurrentProfileGreen, mnCurrentProfileBlue);
-
-    ledPwrStrip.show();
-  }
-
-  //throb EMRG LED with RED
-  if ( (force_update) || 
-       ((current_time - mnLastUpdateEMRG) > EMRG_LED_INTERVAL)  )
-  {
-    mnLastUpdateEMRG = current_time;
-    
-    int nCurrentEMRG = mnEMRGCurrentStrength;
-    int nEMRGIncrement = (mnEMRGMaxStrength - mnEMRGMinStrength) / (EMRG_LED_INTERVAL / 8);
-    if (nCurrentEMRG >= mnEMRGMaxStrength || nCurrentEMRG <= mnEMRGMinStrength) 
-    {
-      mbEMRGdirection = !mbEMRGdirection;
-    }
-    nCurrentEMRG = nCurrentEMRG + ((mbEMRGdirection == true ? 1 : -1) * nEMRGIncrement);
-
-    //clamp
-    if (nCurrentEMRG > mnEMRGMaxStrength) nCurrentEMRG == mnEMRGMaxStrength;
-    if (nCurrentEMRG < mnEMRGMinStrength) nCurrentEMRG == mnEMRGMinStrength;
-      
-    mnEMRGCurrentStrength = nCurrentEMRG;
-    
-    //update red color brightness
-    ledPwrStrip.setPixelColor(EMRG_PIXEL_POSITION, nCurrentEMRG, 0, 0);
-    ledPwrStrip.show();
-  }
-
-  //unsure if want to use, as this needs to be sensor flash.
-  //this has a separate update interval from power because we want this to come back faster than 30 seconds after color scanner is used
-  if (get_software_state() != RGB_SCREEN) 
-  {
+    // ***************
+    //    POWER LED
+    // ***************
     if ( (force_update) || 
-         ((current_time - last_update_board_led_timestamp) > BOARD_LED_INTERVAL) )
+         ((current_time - mnLastUpdatePower) > POWER_LED_INTERVAL)) 
     {
-      last_update_board_led_timestamp = current_time;
-      
-      if (board_pixel_animation == COLOR_BLINK_PATTERN) 
+      mnLastUpdatePower = current_time;
+  
+      if (strip_pixel_animation == COLOR_BLINK_PATTERN) 
       {
-        switch (next_BOARD_color) 
+        switch (next_PWR_color) 
         {
-          case 4:  ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelBlue);   next_BOARD_color = 3; break;
-          case 3:  ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelGreen);  next_BOARD_color = 2; break;
-          case 2:  ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelYellow); next_BOARD_color = 1; break;
-          case 1:  ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelOrange); next_BOARD_color = 0; break;
-          default: ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelRed);    next_BOARD_color = 4; break;
-        }
-      } 
-      else  // board_pixel_animation == DISPLAY_BATTERY_HEALTH
-      {
-        int nBattMapBoard = GetBatteryTier(); //returns 0-4
-        switch (nBattMapBoard) 
-        {
-          case 4:  ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelBlue);   break;
-          case 3:  ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelGreen);  break;
-          case 2:  ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelYellow); break;
-          case 1:  ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelOrange); break;
-          default: ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelRed);    break;
+          case 4:  ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelBlue);   next_PWR_color = 3; break;
+          case 3:  ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelGreen);  next_PWR_color = 2; break;
+          case 2:  ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelYellow); next_PWR_color = 1; break;
+          case 1:  ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelOrange); next_PWR_color = 0; break;
+          default: ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelRed);    next_PWR_color = 4; break;
         }
       }
-      
-      ledBoard.show();
+      else // strip_pixel_animation == DISPLAY_BATTERY_HEALTH
+      {
+        int nBattMap = GetBatteryTier(); //returns 0-4
+        switch (nBattMap)
+        {
+          case 4:  ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelBlue);   break;
+          case 3:  ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelGreen);  break;
+          case 2:  ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelYellow); break;
+          case 1:  ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelOrange); break;
+          default: ledPwrStrip.setPixelColor(PWR_PIXEL_POSITION, neoPixelRed);    break;
+        }
+      } //end if powercolorCycle
+  
+      ledPwrStrip.show();
     }
-  } else {
-    //color scanner app running - do nothing
+  
+    // ***************
+    //    ID LED
+    // ***************
+    //need to push ID LED separate from power, as PWR only updates every 30 seconds
+    if ( (force_update) || 
+         ((current_time - mnLastUpdateIDLED) > ID_LED_INTERVAL) ) 
+    {
+      mnLastUpdateIDLED = current_time;
+      
+      //set ID LED color based on value pulled from A0, middle prong of scroll potentiometer
+      //colors range is purple > blue > green > yellow > orange > red > pink > white
+      nScrollerValue = analogRead(PIN_SCROLL_INPUT);
+      nTempColor = map(nScrollerValue, 0, 1023, 0, NUMBER_ID_COLORS-1);
+      
+      msCurrentProfileName = marrProfiles[nTempColor];
+  
+      //calling uint16 parameter function for set color was not working. converting uint16 to rgb
+      mnCurrentProfileRed   = ((((mnIDLEDColorscape[nTempColor] >> 11) & 0x1F) * 527) + 23) >> 6;
+      mnCurrentProfileGreen = ((((mnIDLEDColorscape[nTempColor] >>  5) & 0x3F) * 259) + 33) >> 6;
+      mnCurrentProfileBlue  = (((mnIDLEDColorscape[nTempColor]         & 0x1F) * 527) + 23) >> 6;
+      
+      ledPwrStrip.setPixelColor(ID_PIXEL_POSITION, mnCurrentProfileRed, mnCurrentProfileGreen, mnCurrentProfileBlue);
+  
+      ledPwrStrip.show();
+    }
+  
+    // ***************
+    //    EMERG LED
+    // ***************
+    //throb EMRG LED with RED
+    if ( (force_update) || 
+         ((current_time - mnLastUpdateEMRG) > EMRG_LED_INTERVAL)  )
+    {
+      mnLastUpdateEMRG = current_time;
+      
+      int nCurrentEMRG = mnEMRGCurrentStrength;
+      int nEMRGIncrement = (mnEMRGMaxStrength - mnEMRGMinStrength) / (EMRG_LED_INTERVAL / 8);
+      if (nCurrentEMRG >= mnEMRGMaxStrength || nCurrentEMRG <= mnEMRGMinStrength) 
+      {
+        mbEMRGdirection = !mbEMRGdirection;
+      }
+      nCurrentEMRG = nCurrentEMRG + ((mbEMRGdirection == true ? 1 : -1) * nEMRGIncrement);
+  
+      //clamp
+      if (nCurrentEMRG > mnEMRGMaxStrength) nCurrentEMRG == mnEMRGMaxStrength;
+      if (nCurrentEMRG < mnEMRGMinStrength) nCurrentEMRG == mnEMRGMinStrength;
+        
+      mnEMRGCurrentStrength = nCurrentEMRG;
+      
+      //update red color brightness
+      ledPwrStrip.setPixelColor(EMRG_PIXEL_POSITION, nCurrentEMRG, 0, 0);
+      ledPwrStrip.show();
+    }
+  
+    //unsure if want to use, as this needs to be sensor flash.
+    //this has a separate update interval from power because we want this to come back faster than 30 seconds after color scanner is used
+    if ((software_state != RGB_SCREEN) && (software_state > SYSTEM_NO_CHANGE_MODES ) )
+    {
+      if ( (force_update) || 
+           ((current_time - last_update_board_led_timestamp) > BOARD_LED_INTERVAL) )
+      {
+        last_update_board_led_timestamp = current_time;
+        
+        if (board_pixel_animation == COLOR_BLINK_PATTERN) 
+        {
+          switch (next_BOARD_color) 
+          {
+            case 4:  ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelBlue);   next_BOARD_color = 3; break;
+            case 3:  ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelGreen);  next_BOARD_color = 2; break;
+            case 2:  ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelYellow); next_BOARD_color = 1; break;
+            case 1:  ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelOrange); next_BOARD_color = 0; break;
+            default: ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelRed);    next_BOARD_color = 4; break;
+          }
+        } 
+        else  // board_pixel_animation == DISPLAY_BATTERY_HEALTH
+        {
+          int nBattMapBoard = GetBatteryTier(); //returns 0-4
+          switch (nBattMapBoard) 
+          {
+            case 4:  ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelBlue);   break;
+            case 3:  ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelGreen);  break;
+            case 2:  ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelYellow); break;
+            case 1:  ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelOrange); break;
+            default: ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelRed);    break;
+          }
+        }
+        
+        ledBoard.show();
+      }
+    } else {
+      //color scanner app running - do nothing
+    }
   }
 }
 
 void SetActiveNeoPixelButton(int nButtonID) 
 {
-  if (NEOPIXEL_LED_COUNT != 6) return;
-    
-  //if bottom right of screen gets a tiny led board, extend same logic to those?
-  //NEOPIXEL_LED_COUNT would be 9 in that case
   switch (nButtonID) 
   {
-    case OFF_NEO_PIXEL_PATTERN: //TBD
-        ledPwrStrip.setPixelColor( PWR_PIXEL_POSITION, neoPixelBlack);
-        ledPwrStrip.setPixelColor(  ID_PIXEL_POSITION, neoPixelBlack);
-        ledPwrStrip.setPixelColor(EMRG_PIXEL_POSITION, neoPixelBlack);
+    case OFF_NEO_PIXEL_PATTERN:
+        ledPwrStrip.clear();
+        ledBoard.clear();
+        strip_pixel_animation = OFF_NEO_PIXEL_PATTERN;
+        board_pixel_animation = OFF_NEO_PIXEL_PATTERN;
         break;
         
     //home screen, NO APPS ACTIVE
@@ -1092,6 +1237,7 @@ void SetActiveNeoPixelButton(int nButtonID)
   }
   
   ledPwrStrip.show();
+  ledBoard.show();
 }
 
 void RunBoardLEDs() 
