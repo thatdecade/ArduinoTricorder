@@ -24,7 +24,7 @@
 
 
 #define DEBUGSERIAL 1
-#define DEBUGMAGNET 1
+//#define DEBUGMAGNET_ON_SERIAL 1
 
 /*
  Full arduino pinout for this board is here:
@@ -465,6 +465,11 @@ void setup()
 {
 #ifdef DEBUGSERIAL
   Serial.begin(115200);
+  while ( !Serial )
+  {
+    delay(10); //wait up to 2 seconds for serial to connect
+    if (millis() > 2000) break;
+  }
 #endif
 
   //NRF_UICR->NFCPINS = 0;
@@ -531,6 +536,16 @@ void setup()
     oColorSensor.setADCGain(APDS9960_AGAIN_16X);
     oColorSensor.enableColorInterrupt();
     oColorSensor.setADCIntegrationTime(50);
+    
+#ifdef DEBUGSERIAL
+    Serial.println("Color Sensor Online");
+#endif
+  }
+  else
+  {
+#ifdef DEBUGSERIAL
+    Serial.println("Color Sensor Offline");
+#endif
   }
 
   //temp sensor
@@ -678,7 +693,7 @@ void check_for_sleep()
        ( (nLastMagnetZ < mnMagnetAproachingThreshold ) && ((millis() - mnLastMagnetCheck) > 100 ))
      )
   {
-#if defined(DEBUGSERIAL) && defined(DEBUGMAGNET)
+#if defined(DEBUGSERIAL) && defined(DEBUGMAGNET_ON_SERIAL)
       Serial.print("Last Magnet Value: ");
       Serial.print(nLastMagnetZ);
       Serial.print(" < Threshold: ");
@@ -696,7 +711,7 @@ void check_for_sleep()
     }
 #endif
     
-#if defined(DEBUGSERIAL) && defined(DEBUGMAGNET)
+#if defined(DEBUGSERIAL) && defined(DEBUGMAGNET_ON_SERIAL)
       Serial.print("Sleep timer: ");
       Serial.println(check_sleep_timer());
       Serial.print("Magnet Value: ");
@@ -774,7 +789,7 @@ void update_pixel_animation_pattern()
   }
 }
 
-void update_button_lights() 
+void update_button_lights() //this is overruled if OFF_NEO_PIXEL_PATTERN
 {
   switch(get_software_state())
   {
@@ -1668,6 +1683,9 @@ void display_RGB_screen()
   {
     drawParamText(211,  21, "CHROMATICS",     color_TITLETEXT);
     drawParamText(110, 169, "SENSOR OFFLINE", color_MAINTEXT);
+#ifdef DEBUGSERIAL
+    Serial.println("Color Sensor Offline");
+#endif
   }
   else
   {
@@ -1734,27 +1752,45 @@ void RunRGBSensor()
   if ( ( color_sensor_waiting ) ||
        ( millis() - last_RGB_scan_timestamp > RGB_SCAN_INTERVAL ) )
   {
-    last_RGB_scan_timestamp = millis();
-    
     tft.fillRect(175, 135, 59, 44, ST77XX_BLACK);
     tft.fillRect(198,  31, 28, 70, ST77XX_BLACK);
     tft.fillRect( 74,  31, 30, 70, ST77XX_BLACK);
     tft.fillRect( 74, 135, 27, 95, ST77XX_BLACK);
 
+#ifdef DEBUGSERIAL
+    Serial.print("Waiting on color sensor for ");
+    Serial.print((millis() - last_RGB_scan_timestamp));
+    Serial.println("ms.");
+#endif
     uint16_t nRed, nGreen, nBlue, nClear, nTempMax;
     nTempMax = 0;
     ActivateFlash();
 
-    color_sensor_waiting = true;
-    if(!oColorSensor.colorDataReady() || nTempMax == 0)
+    //ignore the first request and come back on the next loop
+    //gives the flash time to expose the color
+    if(!color_sensor_waiting)
+    {
+      color_sensor_waiting = true;
+      return;
+    }
+
+    while(!oColorSensor.colorDataReady())
     {
       return; //not ready, come back later
-      //nTempMax = 1;
     }
+    last_RGB_scan_timestamp = millis();
     color_sensor_waiting = false; //read is good, go back to scan schedule
 
     oColorSensor.getColorData(&nRed, &nGreen, &nBlue, &nClear);
 
+#ifdef DEBUGSERIAL
+    Serial.print("Raw Red: ");
+    Serial.print(nRed);
+    Serial.print(", Raw Green: ");
+    Serial.print(nGreen);
+    Serial.print(", Raw Blue: ");
+    Serial.println(nBlue);
+#endif
     if (nRed > 255 || nGreen > 255 || nBlue > 255) {
       //convert rgb to 0-255 range based on w/e we have, if its trash?
       nTempMax = ThreewayIntMax(nRed, nGreen, nBlue);
