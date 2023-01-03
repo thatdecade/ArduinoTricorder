@@ -65,6 +65,7 @@
   D10   Data     Cover NeoPixels (PWR, ID, EMRG)
    D8   Data     Board NeoPixels (Front Camera Flash)
    D9   Output   Audio FX Trigger
+  D11   Output   PWM Backlight Control (pull down to turn the backlight off)
    A2   Output   Left LED Scanner (ALPHA)
    A3   Output   Left LED Scanner (BETA)
    A4   Output   Left LED Scanner (GAMMA)
@@ -106,6 +107,7 @@
 #define TFT_RST               -1  //disabled
 #define TFT_DC                (5)
 #define USE_SD_CARD           (0)
+#define TFT_BACKLIGHT        (11)
 
 //pin 9 is free, as pin_a6 is for vbat and is otherwise known as digital 20
  //INPUT_POWER_PIN. 
@@ -509,6 +511,9 @@ void setup()
   pinMode(SOUND_TRIGGER_PIN, OUTPUT);
   DisableSound();
 
+  pinMode(TFT_BACKLIGHT, OUTPUT);
+  turn_lcd_backlight_on();
+
   //or it'll be read as low and boot the tricorder into environment section
   disable_input_switches();
 
@@ -613,7 +618,6 @@ void setup()
   Serial.println("Setup Complete");
 #endif
 }
-
 
 void loop()
 {
@@ -981,6 +985,16 @@ void update_sound()
   }
 }
 
+void turn_lcd_backlight_on()
+{
+  analogWrite(TFT_BACKLIGHT, 255);
+}
+
+void turn_lcd_backlight_off()
+{
+  analogWrite(TFT_BACKLIGHT, 0);
+}
+
 void SleepMode() 
 {
   //turn off screen
@@ -1026,6 +1040,7 @@ void SleepMode()
   mbTempBarComplete  = false;
   mbBaromBarComplete = false;
 
+  turn_lcd_backlight_off();
   set_software_state(SLEEPING);
 }
 
@@ -1036,7 +1051,7 @@ void ActiveMode()
   
   //force immediate refresh of neopixel LEDs
   RunNeoPixelColor(true);
-  
+  turn_lcd_backlight_on();
   set_software_state(MAIN_SCREEN); //home
 }
 
