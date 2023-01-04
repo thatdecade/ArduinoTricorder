@@ -8,9 +8,9 @@
 #include "buttons.h"
 
 
-#define GEO_BUTTON_1_PIN        (2)              // GEO
-#define MET_BUTTON_2_PIN        (PIN_SERIAL1_TX) // MET
-#define BIO_BUTTON_3_PIN        (PIN_SERIAL1_RX) // BIO
+#define GEO_BUTTON_1_PIN        (11) // GEO
+#define MET_BUTTON_2_PIN        (12) // MET
+#define BIO_BUTTON_3_PIN        (13) // BIO
 #define CAM_BUTTON_BOARD        (PIN_BUTTON1)  // PIN_BUTTON1 - CAMERA / Board Button
 
 byte pinMap_buttons[NUMBER_OF_BUTTONS] =

@@ -58,14 +58,15 @@
    MO   MOSI     TFT
    A6   Input    VOLTAGE_MONITOR 
    A0   Input    Scroll Wheel (Library)
-   D2   Input    GEO Button (Left)
-   TX   Input    MET Button (Center)
-   RX   Input    BIO Button (Right)
+  D11   Input    GEO Button (Left)
+  D12   Input    MET Button (Center)
+  D13   Input    BIO Button (Right)
    D7   Input    Board Button (Camera)
   D10   Data     Cover NeoPixels (PWR, ID, EMRG)
    D8   Data     Board NeoPixels (Front Camera Flash)
-   D9   Output   Audio FX Trigger
-  D11   Output   PWM Backlight Control (pull down to turn the backlight off)
+   TX   Output   DFPlayer RX
+   RX   Output   DFPlayer TX
+   D9   Output   PWM Backlight Control (pull down to turn the backlight off)
    A2   Output   Left LED Scanner (ALPHA)
    A3   Output   Left LED Scanner (BETA)
    A4   Output   Left LED Scanner (GAMMA)
@@ -107,7 +108,7 @@
 #define TFT_RST               -1  //disabled
 #define TFT_DC                (5)
 #define USE_SD_CARD           (0)
-#define TFT_BACKLIGHT        (11)
+#define TFT_BACKLIGHT         (9)
 
 //pin 9 is free, as pin_a6 is for vbat and is otherwise known as digital 20
  //INPUT_POWER_PIN. 
