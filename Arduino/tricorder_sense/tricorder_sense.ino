@@ -561,37 +561,41 @@ void setup()
   oMagneto.setRange(LIS3MDL_RANGE_8_GAUSS);
   //oMagneto.configInterrupt(false, false, true, true, false, true);
 
-  SetThermalClock();
-  uint16_t oCameraParams[834];
-  int nStatus = -1;
-
-  nStatus = MLX90640_DumpEE(mbCameraAddress, oCameraParams);
-
-  if (nStatus == 0) 
+  if (isThermalConnected() == true)
   {
-    Thermal_Camera_Started = true;
-    nStatus = MLX90640_ExtractParameters(oCameraParams, &moCameraParams);
-    //start at 1hz
-    MLX90640_SetRefreshRate(mbCameraAddress, 0x01);
-    //oThermalCamera.setMode(MLX90640_CHESS);
-    //oThermalCamera.setResolution(MLX90640_ADC_16BIT);
-    //minimize refresh rate since we can't turn off the camera?
-    //refresh rate will be double viable display frame rate, as need 2 data pulls per frame
-    //1Hz refresh rate works when clock is at 100kHz
-    //oThermalCamera.setRefreshRate(MLX90640_1_HZ);
-    //4Hz refresh rate works when clock is at 400kHz - 2fps
-    //oThermalCamera.setRefreshRate(MLX90640_4_HZ);
-    //Wire.setClock(1000000); // max 1 MHz gets translated to 400kHz with adafruit "driver"
-    //TWIM_FREQUENCY_FREQUENCY_K100 is default for board?
-    //TWIM_FREQUENCY_FREQUENCY_K250
-    //TWIM_FREQUENCY_FREQUENCY_K400
-    //8fps for screen is viable if clock speed is 800kHz & camera refresh rate is 16hz
-    //need to modify wire_nrf52.cpp to support
-    //TWIM_FREQUENCY_FREQUENCY_K1000
-    ////Wire.setClock(TWIM_FREQUENCY_FREQUENCY_K400);
-    //Wire.endTransmission(MLX90640_I2CADDR_DEFAULT);
+    SetThermalClock();
+    uint16_t oCameraParams[834];
+    int nStatus = -1;
+
+    nStatus = MLX90640_DumpEE(mbCameraAddress, oCameraParams);
+
+    if (nStatus == 0) 
+    {
+      Thermal_Camera_Started = true; //be warned, both MLX90640_DumpEE and MLX90640_ExtractParameters return true when the camera is not present
+      nStatus = MLX90640_ExtractParameters(oCameraParams, &moCameraParams);
+
+      //start at 1hz
+      MLX90640_SetRefreshRate(mbCameraAddress, 0x01);
+      //oThermalCamera.setMode(MLX90640_CHESS);
+      //oThermalCamera.setResolution(MLX90640_ADC_16BIT);
+      //minimize refresh rate since we can't turn off the camera?
+      //refresh rate will be double viable display frame rate, as need 2 data pulls per frame
+      //1Hz refresh rate works when clock is at 100kHz
+      //oThermalCamera.setRefreshRate(MLX90640_1_HZ);
+      //4Hz refresh rate works when clock is at 400kHz - 2fps
+      //oThermalCamera.setRefreshRate(MLX90640_4_HZ);
+      //Wire.setClock(1000000); // max 1 MHz gets translated to 400kHz with adafruit "driver"
+      //TWIM_FREQUENCY_FREQUENCY_K100 is default for board?
+      //TWIM_FREQUENCY_FREQUENCY_K250
+      //TWIM_FREQUENCY_FREQUENCY_K400
+      //8fps for screen is viable if clock speed is 800kHz & camera refresh rate is 16hz
+      //need to modify wire_nrf52.cpp to support
+      //TWIM_FREQUENCY_FREQUENCY_K1000
+      ////Wire.setClock(TWIM_FREQUENCY_FREQUENCY_K400);
+      //Wire.endTransmission(MLX90640_I2CADDR_DEFAULT);
+    }
+    ResetWireClock();
   }
-  ResetWireClock();
 
   //10k potentiometer / scroller should be limited to a readable range of 10-890
   //analog write values can go from 0 to 255. analogRead can go from 0 to 2^(analogReadResolution)
@@ -821,10 +825,9 @@ void RunNeoPixelColor(bool force_update)
 
   }
   
-  if ( (software_state == RGB_SCREEN) && 
-       (software_state < SYSTEM_NO_CHANGE_MODES ) )
+  if ( software_state < SYSTEM_NO_CHANGE_MODES )
   {
-    //color scanner running or sleeping - do nothing
+    //sleeping - do nothing
     return;
   }
 
@@ -950,25 +953,29 @@ void RunNeoPixelColor(bool force_update)
     
     int nCurrentEMRG = mnEMRGCurrentStrength;
     
-    if (nCurrentEMRG >= EMRG_MAX_BRIGHTNESS || nCurrentEMRG <= EMRG_MIN_BRIGHTNESS) 
+    if(software_state == MAIN_SCREEN)
     {
-      mbEMRGdirection = !mbEMRGdirection;
+      if (nCurrentEMRG >= EMRG_MAX_BRIGHTNESS || nCurrentEMRG <= EMRG_MIN_BRIGHTNESS) 
+      {
+        mbEMRGdirection = !mbEMRGdirection;
+      }
+      nCurrentEMRG = nCurrentEMRG + ((mbEMRGdirection == true ? 1 : -1) * EMRG_BREATH_INCREMENT);
+
+      //clamp
+      if (nCurrentEMRG > EMRG_MAX_BRIGHTNESS) nCurrentEMRG = EMRG_MAX_BRIGHTNESS;
+      if (nCurrentEMRG < EMRG_MIN_BRIGHTNESS) nCurrentEMRG = EMRG_MIN_BRIGHTNESS;
+        
+      mnEMRGCurrentStrength = nCurrentEMRG;
+
+      //update red color brightness
+      ledPwrStrip.setPixelColor(EMRG_PIXEL_POSITION, nCurrentEMRG, 0, 0);
+      ledPwrStrip.show();
     }
-    nCurrentEMRG = nCurrentEMRG + ((mbEMRGdirection == true ? 1 : -1) * EMRG_BREATH_INCREMENT);
-
-    //clamp
-    if (nCurrentEMRG > EMRG_MAX_BRIGHTNESS) nCurrentEMRG = EMRG_MAX_BRIGHTNESS;
-    if (nCurrentEMRG < EMRG_MIN_BRIGHTNESS) nCurrentEMRG = EMRG_MIN_BRIGHTNESS;
-      
-    mnEMRGCurrentStrength = nCurrentEMRG;
-
-#ifdef DEBUGSERIAL
-    Serial.print("EMERG LED value: ");
-    Serial.println(nCurrentEMRG);
-#endif
-    //update red color brightness
-    ledPwrStrip.setPixelColor(EMRG_PIXEL_POSITION, nCurrentEMRG, 0, 0);
-    ledPwrStrip.show();
+    else if (software_state != RGB_SCREEN)
+    {
+      ledPwrStrip.setPixelColor(EMRG_PIXEL_POSITION, 0, 0, 0);
+      ledPwrStrip.show();
+    }
   }
 
   // ***************
@@ -980,7 +987,7 @@ void RunNeoPixelColor(bool force_update)
   {
     last_update_board_led_timestamp = current_time;
     
-    if (software_state != BATTERY_SCREEN) 
+    if ((software_state != BATTERY_SCREEN) && (software_state != RGB_SCREEN))
     {
       switch (next_BOARD_color) 
       {
@@ -991,7 +998,7 @@ void RunNeoPixelColor(bool force_update)
         default: ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelRed);    next_BOARD_color = 4; break;
       }
     } 
-    else  //software_state == BATTERY_SCREEN
+    else if (software_state == BATTERY_SCREEN)
     {
       int nBattMapBoard = GetBatteryTier(); //returns 0-4
       switch (nBattMapBoard) 
@@ -1003,6 +1010,7 @@ void RunNeoPixelColor(bool force_update)
         default: ledBoard.setPixelColor(BOARD_PIXEL_POSITION, neoPixelRed);    break;
       }
     }
+    // ese: color scanner running - do nothing
     
     ledBoard.show();
   }
@@ -1536,6 +1544,21 @@ void RunHome()
 
 }
 
+bool isThermalConnected()
+{
+  const byte MLX90640_address = 0x33; //Default 7-bit unshifted address of the MLX90640
+  bool return_value = true;
+  
+  SetThermalClock();
+  Wire.beginTransmission((uint8_t)MLX90640_address);
+  if (Wire.endTransmission() != 0)
+  {
+    return_value = false; //Sensor did not ACK
+  }
+  ResetWireClock();
+  return return_value;
+}
+
 void ResetWireClock() {
   //Wire.endTransmission(MLX90640_I2CADDR_DEFAULT);
   //all sensors on i2c use 100,000 rate.
@@ -1675,6 +1698,10 @@ void RunRGBSensor()
       nGreen = map(nGreen, 0, nTempMax, 0, 255);
       nBlue = map(nBlue, 0, nTempMax, 0, 255);
     }
+
+    //display color on EMRG light
+    ledPwrStrip.setPixelColor(EMRG_PIXEL_POSITION, nRed/2, nGreen/2, nBlue/2);
+    ledPwrStrip.show();
 
     ///convert rgb to HSL
     double arrdHSL[2];
