@@ -17,6 +17,8 @@
 #include "buttons.h"
 #include "menu_navigation.h"
 #include "sleep_timer.h"
+#include <SoftwareSerial.h>
+#include <DFRobotDFPlayerMini.h>
 
 #if defined(USE_TINYUSB)
 #include <Adafruit_TinyUSB.h> // for Serial
@@ -115,8 +117,6 @@
  //mnRF52840 is not 5V tolerance, max analog-in is VCC+0.3V or 3.9V, whichever is lower.  
  // The adafruit sense board has a hardwired 50% voltage divider.
 #define VOLT_PIN              PIN_A6   
-
-#define SOUND_TRIGGER_PIN     (9)
 
 //buttons are defined in buttons.h
 
@@ -242,7 +242,10 @@ uint32_t neoPixelOrange = ledPwrStrip.Color( 128,  96,   0);
 uint32_t neoPixelRed    = ledPwrStrip.Color( 128,   0,   0);
 uint32_t neoPixelWhite  = ledPwrStrip.Color( 255, 255, 255);
 
-// do not fuck with this. 2.0" IS THE BOARD - this call uses hardware SPI
+SoftwareSerial mySoftwareSerial(PIN_SERIAL1_RX, PIN_SERIAL1_TX); // RX, TX
+DFRobotDFPlayerMini myDFPlayer;
+
+//  2.0" IS THE BOARD - this call uses hardware SPI
 Adafruit_ST7789   tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 //create sensor objects
 Adafruit_APDS9960 oColorSensor;
@@ -462,6 +465,8 @@ void setup()
   }
 #endif
 
+  mySoftwareSerial.begin(9600);
+
   //NRF_UICR->NFCPINS = 0;
   ledPwrStrip.begin();
   ledBoard.begin();
@@ -496,9 +501,6 @@ void setup()
   pinMode(LED_RED,  OUTPUT);
   pinMode(LED_BLUE, OUTPUT);
 
-  pinMode(SOUND_TRIGGER_PIN, OUTPUT);
-  DisableSound();
-
   pinMode(TFT_BACKLIGHT, OUTPUT);
   turn_lcd_backlight_on();
 
@@ -513,6 +515,33 @@ void setup()
 
   pinMode(VOLT_PIN, INPUT);
 
+#ifdef DEBUGSERIAL
+  Serial.println(F("DFRobot DFPlayer Mini Demo"));
+  Serial.println(F("Initializing DFPlayer ... (May take 3~5 seconds)"));
+#endif
+  for(uint8_t i=0; i < 5; i++ )
+  {  //Use softwareSerial to communicate with mp3.
+    if(myDFPlayer.begin(mySoftwareSerial))
+    {
+      break;
+    }
+    i++;
+#ifdef DEBUGSERIAL
+    Serial.print(F("Unable to begin DFPLayer, re-attempt :"));
+    Serial.println(i);
+    delay(1000);
+#endif
+  }
+#ifdef DEBUGSERIAL
+  Serial.println(F("DFPlayer Mini online."));
+#endif
+  
+  if (myDFPlayer.available()) 
+  {
+    myDFPlayer.volume(30);  //Set volume value. From 0 to 30
+    ActivateSound();
+  }
+  
   //initialize color sensor, show error if unavailable. sensor hard-coded name is "ADPS"
   //begin will return false if initialize failed.
   //this shit is super plug & play - library uses i2c address 0x39, same as one used by this board
@@ -1149,12 +1178,26 @@ void ActiveMode()
 
 void ActivateSound() 
 {
-  digitalWrite(SOUND_TRIGGER_PIN, LOW);
+  DisableSound();
+#ifdef DEBUGSERIAL
+    Serial.println("Play Sounds");
+#endif
+  if (myDFPlayer.available()) 
+  {
+    myDFPlayer.play(1);
+    myDFPlayer.loop(1);
+  }
 }
 
 void DisableSound() 
 {
-  digitalWrite(SOUND_TRIGGER_PIN, HIGH);
+#ifdef DEBUGSERIAL
+    Serial.println("Stop Sounds");
+#endif
+  if (myDFPlayer.available()) 
+  {
+    myDFPlayer.stop();
+  }
 }
 
 void RunBoardLEDs() 
