@@ -18,7 +18,7 @@ On Power up, the main screen is displayed and the sound effects start.
 
 * To navigate the info pages, press left or right.  Pressing center goes home.
 * To toggle sound effects, hold the left button.
-* Close the lid to put to sleep, low power mode.
+* Close the lid or wait 10 mins to put to sleep, low power mode.  Open the lid or press a button to wake up.
 
 Thermal Camera: To access the video, press the button marked User SW on the Feather board.
 
