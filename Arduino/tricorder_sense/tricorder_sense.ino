@@ -519,27 +519,28 @@ void setup()
   Serial.println(F("DFRobot DFPlayer Mini Demo"));
   Serial.println(F("Initializing DFPlayer ... (May take 3~5 seconds)"));
 #endif
-  for(uint8_t i=0; i < 5; i++ )
+  for(uint8_t i=0; i < 4; i++ )
   {  //Use softwareSerial to communicate with mp3.
     if(myDFPlayer.begin(mySoftwareSerial))
     {
       break;
     }
-    i++;
+    
+    analogWrite(SCAN_LED_PIN_1 + i, 0);
 #ifdef DEBUGSERIAL
     Serial.print(F("Unable to begin DFPLayer, re-attempt :"));
     Serial.println(i);
     delay(1000);
 #endif
   }
-#ifdef DEBUGSERIAL
-  Serial.println(F("DFPlayer Mini online."));
-#endif
   
   if (myDFPlayer.available()) 
   {
+#ifdef DEBUGSERIAL
+    Serial.println(F("DFPlayer Mini online."));
+#endif
     myDFPlayer.volume(30);  //Set volume value. From 0 to 30
-    ActivateSound();
+    //ActivateSound();
   }
   
   //initialize color sensor, show error if unavailable. sensor hard-coded name is "ADPS"
@@ -665,21 +666,27 @@ void process_schedule()
 {
   static unsigned long process_display_timer = 0;
   static byte last_state = INITILIZATION;
-  uint8_t current_state = get_software_state();
   
   //these are the "do once" things when the mode changes
-  if (last_state != current_state)
+  if (last_state != get_software_state())
   {
+#if defined(DEBUGSERIAL)
+      Serial.print("Current State: ");
+      Serial.print(get_software_state());
+      Serial.print(", Last State: ");
+      Serial.println(last_state);
+#endif
     reset_sleep_timer();
     reset_drawing_globals();
-    update_menu_displayed();
+    update_menu_displayed(); // side effect: INITILIZATION -> MAIN_SCREEN
     update_sound();
     RunNeoPixelColor(true) ;
     
     //save last_state at end. Allows smooth init->main transition
-    last_state = current_state;
+    last_state = get_software_state();
   }
   
+  //do this on a schedule
   if (millis() > process_display_timer + DISPLAY_UPDATE_RATE)
   {
     process_display_timer = millis();
@@ -688,7 +695,7 @@ void process_schedule()
   }
 
   //do these when not sleeping
-  if(SYSTEM_NO_CHANGE_MODES < current_state)
+  if(SYSTEM_NO_CHANGE_MODES < get_software_state())
   {
     //update lights
     RunNeoPixelColor(false);
@@ -1179,11 +1186,11 @@ void ActiveMode()
 void ActivateSound() 
 {
   DisableSound();
+  if (myDFPlayer.available()) 
+  {
 #ifdef DEBUGSERIAL
     Serial.println("Play Sounds");
 #endif
-  if (myDFPlayer.available()) 
-  {
     myDFPlayer.play(1);
     myDFPlayer.loop(1);
   }
@@ -1191,11 +1198,11 @@ void ActivateSound()
 
 void DisableSound() 
 {
+  if (myDFPlayer.available()) 
+  {
 #ifdef DEBUGSERIAL
     Serial.println("Stop Sounds");
 #endif
-  if (myDFPlayer.available()) 
-  {
     myDFPlayer.stop();
   }
 }
