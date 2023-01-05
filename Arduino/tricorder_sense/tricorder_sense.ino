@@ -1068,6 +1068,13 @@ void update_sound(bool force)
   static uint8_t last_track_played = 0;
   static bool player_refresh_or_status_check = true;
   static bool play_status_ok = true;
+  static bool previous_audio_disable = false;
+
+  if(previous_audio_disable != audio_disable)
+  {
+    previous_audio_disable = audio_disable;
+    force = true;
+  }
 
   // Each cyle: either get status or send command, doing both confuses the player
   player_refresh_or_status_check = !player_refresh_or_status_check;
@@ -1088,10 +1095,19 @@ void update_sound(bool force)
         case MAIN_SCREEN:
         case RGB_SCREEN:
         case CLIMATE_SCREEN:
-          //do not re-play track in progress if nothing is wrong.
-          if((last_track_played != 1) || !play_status_ok) start_loop_audio_player(1);
-          expected_play_status = 1;
-          last_track_played = 1;
+          if(!audio_disable)
+          {
+            //do not re-play track in progress if nothing is wrong.
+            if((last_track_played != 1) || !play_status_ok) start_loop_audio_player(1);
+            expected_play_status = 1;
+            last_track_played = 1;
+          }
+          else
+          {
+            stop_audio_player();
+            expected_play_status = 0;
+            last_track_played = 0;
+          }
           break;
         case BATTERY_SCREEN:
           //TBD

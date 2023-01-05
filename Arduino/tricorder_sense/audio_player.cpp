@@ -5,7 +5,7 @@
  *      Author: Dustin Westaby
  */
 
-#define DEBUGSERIAL
+//#define DEBUGSERIAL
 
 #include "audio_player.h"
 

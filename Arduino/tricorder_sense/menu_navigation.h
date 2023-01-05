@@ -42,6 +42,8 @@ enum menu_page_order
 #define MENU_HIGH_WRAP_AROUND MAIN_SCREEN
 #define MENU_LOW_WRAP_AROUND  MICROPHONE_SCREEN //Note: Update this if you add a menu page
 
+extern bool audio_disable;
+
 void process_menu_selection();
 void set_software_state(uint8_t new_state);
 uint8_t get_software_state();

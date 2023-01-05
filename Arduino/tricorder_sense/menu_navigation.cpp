@@ -13,6 +13,8 @@
 byte software_state = INITILIZATION;
 byte software_state_processed = true;
 
+bool audio_disable = false;
+
 //prototypes
 void button_clicked(byte button);
 void button_held(byte button);
@@ -73,14 +75,19 @@ void process_menu_selection()
     {
         //HELD ACTION
 
+  Serial.print("Button ");
+  Serial.print(i);
+  Serial.print(" is ");
+  Serial.println(current_button_state);
+  
         last_menu_interaction_timestamp[i] = millis();
 
         if(last_mode_button_state[i] == NOT_PROCESSED)
         {
             //one action per press / hold
-            for( byte j = 0; i < NUMBER_OF_BUTTONS; i++)
+            for( byte j = 0; j < NUMBER_OF_BUTTONS; j++)
             {
-              last_mode_button_state[i] = PROCESSED;
+              last_mode_button_state[j] = PROCESSED;
             }
 
             if( (get_button_state(MET_BUTTON) == IS_HELD) &&
@@ -93,6 +100,8 @@ void process_menu_selection()
             {
               button_held(i);
             }
+  Serial.print("Button Held ");
+  Serial.println(i);
         }
     }
     else if (current_button_state == IS_NOT_PRESSED)
@@ -258,7 +267,11 @@ void process_camera_click()
 
 void process_left_hold()
 {
-  //TBD
+	audio_disable = !audio_disable;
+	
+  Serial.print("Audio Disable: ");
+  Serial.println(audio_disable);
+    
 }
 
 void process_center_hold()
