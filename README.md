@@ -22,6 +22,10 @@ On Power up, the main screen is displayed and the sound effects start.
 
 Thermal Camera: To access the video, press the button marked User SW on the Feather board.
 
+# Part List
+
+TBD
+
 # 3D Printing
 
 The case assembly notes are on printables: https://www.printables.com/model/225964-printability-remix-of-arduino-tricorder
