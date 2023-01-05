@@ -17,8 +17,7 @@
 #include "buttons.h"
 #include "menu_navigation.h"
 #include "sleep_timer.h"
-#include <SoftwareSerial.h>
-#include <DFRobotDFPlayerMini.h>
+#include "audio_player.h"
 
 #if defined(USE_TINYUSB)
 #include <Adafruit_TinyUSB.h> // for Serial
@@ -242,9 +241,6 @@ uint32_t neoPixelOrange = ledPwrStrip.Color( 128,  96,   0);
 uint32_t neoPixelRed    = ledPwrStrip.Color( 128,   0,   0);
 uint32_t neoPixelWhite  = ledPwrStrip.Color( 255, 255, 255);
 
-SoftwareSerial mySoftwareSerial(PIN_SERIAL1_RX, PIN_SERIAL1_TX); // RX, TX
-DFRobotDFPlayerMini myDFPlayer;
-
 //  2.0" IS THE BOARD - this call uses hardware SPI
 Adafruit_ST7789   tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 //create sensor objects
@@ -277,6 +273,7 @@ bool mbLEDIDSet = false;
 #define CLIMATE_SCAN_INTERVAL     2000
 #define MAGNET_READ_INTERVAL      1000
 #define HOME_UPDATE_INTERVAL      1000
+#define AUDIO_UPDATE_RATE          500
 #define BOARD_RED_LED_INTERVAL     350
 #define BOARD_BLUE_LED_INTERVAL    250
 #define LEFT_SCANNER_LED_INTERVAL  200
@@ -465,8 +462,6 @@ void setup()
   }
 #endif
 
-  mySoftwareSerial.begin(9600);
-
   //NRF_UICR->NFCPINS = 0;
   ledPwrStrip.begin();
   ledBoard.begin();
@@ -515,34 +510,8 @@ void setup()
 
   pinMode(VOLT_PIN, INPUT);
 
-#ifdef DEBUGSERIAL
-  Serial.println(F("DFRobot DFPlayer Mini Demo"));
-  Serial.println(F("Initializing DFPlayer ... (May take 3~5 seconds)"));
-#endif
-  for(uint8_t i=0; i < 4; i++ )
-  {  //Use softwareSerial to communicate with mp3.
-    if(myDFPlayer.begin(mySoftwareSerial))
-    {
-      break;
-    }
-    
-    analogWrite(SCAN_LED_PIN_1 + i, 0);
-#ifdef DEBUGSERIAL
-    Serial.print(F("Unable to begin DFPLayer, re-attempt :"));
-    Serial.println(i);
-    delay(1000);
-#endif
-  }
-  
-  if (myDFPlayer.available()) 
-  {
-#ifdef DEBUGSERIAL
-    Serial.println(F("DFPlayer Mini online."));
-#endif
-    myDFPlayer.volume(30);  //Set volume value. From 0 to 30
-    //ActivateSound();
-  }
-  
+  init_audio_player(SCAN_LED_PIN_1);
+
   //initialize color sensor, show error if unavailable. sensor hard-coded name is "ADPS"
   //begin will return false if initialize failed.
   //this shit is super plug & play - library uses i2c address 0x39, same as one used by this board
@@ -665,6 +634,7 @@ void loop()
 void process_schedule()
 {
   static unsigned long process_display_timer = 0;
+  static unsigned long process_audio_timer = 0;
   static byte last_state = INITILIZATION;
   
   //these are the "do once" things when the mode changes
@@ -679,19 +649,24 @@ void process_schedule()
     reset_sleep_timer();
     reset_drawing_globals();
     update_menu_displayed(); // side effect: INITILIZATION -> MAIN_SCREEN
-    update_sound();
+    update_sound(true);
     RunNeoPixelColor(true) ;
     
     //save last_state at end. Allows smooth init->main transition
     last_state = get_software_state();
   }
   
-  //do this on a schedule
+  //do these on a schedule
   if (millis() > process_display_timer + DISPLAY_UPDATE_RATE)
   {
     process_display_timer = millis();
-    
     refresh_display_data();
+  }
+
+  if (millis() > process_audio_timer + AUDIO_UPDATE_RATE)
+  {
+    process_audio_timer = millis();
+    update_sound(false);
   }
 
   //do these when not sleeping
@@ -1086,33 +1061,54 @@ void refresh_display_data()
   }
 }
 
-void update_sound()
+void update_sound(bool force)
 {
   //only call this once per menu change
-  
-  switch(get_software_state())
+  static int expected_play_status = 0;
+  static uint8_t last_track_played = 0;
+  static bool player_refresh_or_status_check = true;
+  static bool play_status_ok = true;
+
+  // Each cyle: either get status or send command, doing both confuses the player
+  player_refresh_or_status_check = !player_refresh_or_status_check;
+  if(force || player_refresh_or_status_check)
   {
-    case GO_TO_SLEEP:
-    case SLEEPING:
-    case MICROPHONE_SCREEN:
-    case HIDDEN_THERMAL_SCREEN:
-      DisableSound();
-      break;
-    case MAIN_SCREEN:
-    case RGB_SCREEN:
-    case CLIMATE_SCREEN:
-      ActivateSound();
-      break;
-    case BATTERY_SCREEN:
-      //TBD
-      break;
-    case HIDDEN_TOM_SERVO_SCREEN:
-      break;
-    case HIDDEN_LIGHTING_DETECTOR_SCREEN:
-      //TBD
-      break;
-    default:
-      break;
+    if(force || !play_status_ok)
+    {
+      switch(get_software_state())
+      {
+        case GO_TO_SLEEP:
+        case SLEEPING:
+        case MICROPHONE_SCREEN:
+        case HIDDEN_THERMAL_SCREEN:
+          stop_audio_player();
+          expected_play_status = 0;
+          last_track_played = 0;
+          break;
+        case MAIN_SCREEN:
+        case RGB_SCREEN:
+        case CLIMATE_SCREEN:
+          //do not re-play track in progress if nothing is wrong.
+          if((last_track_played != 1) || !play_status_ok) start_loop_audio_player(1);
+          expected_play_status = 1;
+          last_track_played = 1;
+          break;
+        case BATTERY_SCREEN:
+          //TBD
+          break;
+        case HIDDEN_TOM_SERVO_SCREEN:
+          break;
+        case HIDDEN_LIGHTING_DETECTOR_SCREEN:
+          //TBD
+          break;
+        default:
+          break;
+      }
+    }
+  }
+  else
+  {
+    play_status_ok = check_audio_status(expected_play_status);
   }
 }
 
@@ -1181,30 +1177,6 @@ void ActiveMode()
   //tft.enableDisplay(true);
   turn_lcd_backlight_on();
   set_software_state(MAIN_SCREEN); //home
-}
-
-void ActivateSound() 
-{
-  DisableSound();
-  if (myDFPlayer.available()) 
-  {
-#ifdef DEBUGSERIAL
-    Serial.println("Play Sounds");
-#endif
-    myDFPlayer.play(1);
-    myDFPlayer.loop(1);
-  }
-}
-
-void DisableSound() 
-{
-  if (myDFPlayer.available()) 
-  {
-#ifdef DEBUGSERIAL
-    Serial.println("Stop Sounds");
-#endif
-    myDFPlayer.stop();
-  }
 }
 
 void RunBoardLEDs() 

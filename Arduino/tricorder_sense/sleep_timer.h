@@ -16,4 +16,4 @@ void reset_sleep_timer(); //call for user interaction
 
 bool check_sleep_timer();
 
-#endif /* INC_BUTTONS_H_ */
+#endif /* INC_SLEEP_TIMER_H_ */
