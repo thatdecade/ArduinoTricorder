@@ -1,6 +1,8 @@
 # ArduinoTricorder
 Interactive Tricorder Prop with real environmental sensors
 
+Based on the original work by lambtor: https://github.com/lambtor/ArduinoTricorder
+
 # Features
 
 * Animated Lights and Sounds, Interactive Menus
