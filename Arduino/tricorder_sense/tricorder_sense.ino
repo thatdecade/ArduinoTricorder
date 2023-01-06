@@ -7,142 +7,38 @@
 #include <Wire.h>
 #include <Adafruit_BMP280.h>  //altitude, barometer
 #include <Adafruit_SHT31.h>   //temp, humidity
-#include <Adafruit_Sensor.h>  //wtf is this??
-#include <PDM.h>
-#include <Adafruit_ZeroFFT.h>
-#include <MLX90640_API.h>
+#include <Adafruit_Sensor.h>
+#include <PDM.h>              // Microphone
+#include <Adafruit_ZeroFFT.h> // Audio spectrum
+#include <MLX90640_API.h>     //Thermal Camera
 #include <MLX90640_I2C_Driver.h>
 #include <Adafruit_LIS3MDL.h> //magnetometer, for door close detection
-#include <Adafruit_LSM6DS33.h>
+//#include <Adafruit_LSM6DS33.h> //Accel + Gyro (unused)
+
+#include "pinmap.h" // go here to set your own pin definitions
 #include "buttons.h"
 #include "menu_navigation.h"
 #include "sleep_timer.h"
 #include "audio_player.h"
 
 #if defined(USE_TINYUSB)
-#include <Adafruit_TinyUSB.h> // for Serial
+#include <Adafruit_TinyUSB.h> // for Serial, version 1.7.0
 #endif
 
-
-#define DEBUGSERIAL 1
+//comment these out for faster startup and timers
+//#define DEBUGSERIAL 1
 //#define DEBUGMAGNET_ON_SERIAL 1
 
-/*
- Full arduino pinout for this board is here:
- https://github.com/adafruit/Adafruit_nRF52_Arduino/blob/master/variants/feather_nrf52840_sense/variant.h
-
-  List of Hardware
-   - Adafruit Feather nRF52840 Sense
-   - LCD
-   - Audio FX
-   - Neopixels
-   - Buttons
-   - Sequin LEDs
-
-  I2C OnBoard
-  Addr  IRQ  Chip      Type            
-  0x61   D3  LSM6DS33  Gyro + Accel   
-  0x1C       LIS3MDL   Magnetometer   
-  0x44       SHT30     Humidity       
-  0x77       BMP280    Temp + Pressure  
-  0x39  D36  APDS9960  Light + Gesture + Proximity    
-  
-  I2C OffBoard
-  0x33       MLX90640  Thermal Camera
-  0x03  D11  AS3935    Lightning Detector
-  
-  Pin Assignements
-  Pin   Function Device
-   D6   CS       TFT
-   D5   DC       TFT
-  SCK   SCK      TFT
-   MO   MOSI     TFT
-   A6   Input    VOLTAGE_MONITOR 
-   A0   Input    Scroll Wheel (Library)
-  D11   Input    GEO Button (Left)
-  D12   Input    MET Button (Center)
-  D13   Input    BIO Button (Right)
-   D7   Input    Board Button (Camera)
-  D10   Data     Cover NeoPixels (PWR, ID, EMRG)
-   D8   Data     Board NeoPixels (Front Camera Flash)
-   TX   Output   DFPlayer RX
-   RX   Output   DFPlayer TX
-   D9   Output   PWM Backlight Control (pull down to turn the backlight off)
-   A2   Output   Left LED Scanner (ALPHA)
-   A3   Output   Left LED Scanner (BETA)
-   A4   Output   Left LED Scanner (GAMMA)
-   A5   Output   Left LED Scanner (DELTA)
-  D13   Output   Board Red LED
-   D4   Output   Board Blue LED
-   A1   IRQ      Lightning Detector
-  SCL   I2C      Thermal Camera / Lightning Detector
-  SDA   I2C      Thermal Camera / Lightning Detector
-  En    VREG     Enable Power Switch (Short to Ground for OFF)    
-  
-  If you run out of pins, consider moving the buttons and wheel to an Adafruit Joy Featherwing or other GPIO expander.
-  
-  -------------------------------------
-  
-  Adafruit defines physically labeled pin D2 as pin 2 in its header file, but it does not respond when set as an input by default.
-  you will need to modify system_nrf52840.c file by adding
-  #define CONFIG_NFCT_PINS_AS_GPIOS (1)
-  YOU WILL SEE THIS CONSTANT REFERENCED IN THAT FILE, with compiler-conditional logic around it to actually free up the NFC pins, 
-  but only if that constant exists in that file
-
-  -------------------------------------
-  
- */
- 
  
 // need to remove hyphens from header filenames or exception will get thrown
 #include "Fonts/lcars15pt7b.h"
 #include "Fonts/lcars11pt7b.h"
 
-// For the breakout board, you can use any 2 or 3 pins.
-// These pins will also work for the 1.8" TFT shield.
-//need to use pin 6 for TFT_CS, as pin 20 is analog 7. analog 7 is the only way to get current voltage, which is used for battery %
-
-//MISO is not required for screen to work - this is used by mem card only?
-#define TFT_CS                (6)
-// SD card select pin
-//#define SD_CS       11  //- can't use pin 4 as that is for blue connection led
-#define TFT_RST               -1  //disabled
-#define TFT_DC                (5)
-#define USE_SD_CARD           (0)
-#define TFT_BACKLIGHT         (9)
-
-//pin 9 is free, as pin_a6 is for vbat and is otherwise known as digital 20
- //INPUT_POWER_PIN. 
- //mnRF52840 is not 5V tolerance, max analog-in is VCC+0.3V or 3.9V, whichever is lower.  
- // The adafruit sense board has a hardwired 50% voltage divider.
-#define VOLT_PIN              PIN_A6   
-
-//buttons are defined in buttons.h
-
-//only need 1 pin for potentiometer / scroller input. both poles need to be wired to GND and 3v - order doesn't matter
-#define PIN_SCROLL_INPUT      PIN_A0
-
-#define SCAN_LED_PIN_1        PIN_A2
-#define SCAN_LED_PIN_2        PIN_A3
-#define SCAN_LED_PIN_3        PIN_A4
-#define SCAN_LED_PIN_4        PIN_A5
-
 #define SCAN_LED_BRIGHTNESS   (32)
 
-//neopixel power LED. must use an unreserved pin for this.  PWR, ID, EMRG all use this pin
-#define NEOPIXEL_CHAIN_DATAPIN  (10)
 #define NEOPIXEL_BRIGHTNESS     (64)
 
-// built-in pins: D4 = blue conn LED, 8 = neopixel on board, D13 = red LED next to micro usb port
-// commented out lines are pre-defined by the adafruit board firmware
-#define NEOPIXEL_BOARD_LED_PIN   (8)
-//#define PIN_NEOPIXEL         8
-//#define BOARD_REDLED_PIN    13
-//#define BOARD_BLUELED_PIN    4
-//#define LED_RED             13
-//#define LED_BLUE             4
-
-//ledPwrStrip - cover pixels
+//ledPwrStrip - cover and door pixels.  This structure defines the order of the LEDs on the string
 typedef enum
 { //re-arrange as need based on your wiring
   PWR_PIXEL_POSITION = 0, // POWER LED
@@ -260,7 +156,7 @@ int mnEMRGCurrentStrength =   8;
 
 bool mbLEDIDSet = false;
 
-
+/* Timer Values */
 #define POWER_LED_INTERVAL        8000  //power interval doesn't need to check more than every 30 seconds
 #define BOARD_LED_INTERVAL        5000
 #define ID_LED_INTERVAL           1000
@@ -283,6 +179,7 @@ bool mbLEDIDSet = false;
 #define BAR_DRAW_INTERVAL            9
 //17 ms is 60fps. setting this to 120fps, at least for initial crawl
 
+/* EMRG LED Animation */
 #define EMRG_MIN_BRIGHTNESS   50
 #define EMRG_MAX_BRIGHTNESS  212
 #define EMRG_BREATH_INCREMENT ((EMRG_MAX_BRIGHTNESS - EMRG_MIN_BRIGHTNESS) / (EMRG_LED_BREATHING_RATE / EMRG_LED_INTERVAL))
@@ -290,16 +187,16 @@ bool mbEMRGdirection = false;
 
 int mnLeftLEDCurrent = 0;
 
+/* Scroll wheel colors and names */
 #define NUMBER_ID_COLORS 8
                     //colors range is purple > blue > green > yellow > orange > red  > pink > white
 const uint32_t mnIDLEDColorscape[NUMBER_ID_COLORS] = {0x8010, 0x0010, 0x0400, 0x7C20,  0x8300,  0x8000,0x8208,0x7C30};
-
 const String marrProfiles[] = {"ALPHA","BETA","GAMMA","DELTA","EPSILON","ZETA","ETA","THETA"};
-//reverse order for these makes the scroller show alpha when
-//const String marrProfiles[] = {"THETA","ETA","ZETA","EPSILON","DELTA","GAMMA","BETA","ALPHA"};
+//you can reverse order if the pot was wired backwards
 
 const uint16_t mnThermalCameraLabels[] = {0xD6BA,0xC0A3,0xD541,0xD660,0x9E02,0x0458,0x89F1};
 
+/* Module stuff */
 bool color_sensor_initialized  = false;
 bool mbTempInitialized         = false;
 bool mbHumidityInitialized     = false;
@@ -356,8 +253,6 @@ extern PDMClass PDM;
 #define GRAPH_OFFSET            10
 #define GRAPH_WIDTH  (tft.width() - 3)
 #define GRAPH_HEIGHT (tft.height() - GRAPH_OFFSET)
-//#define GRAPH_MIN    (tft.height() - 2)
-//#define GRAPH_MAX    (tft.height() - GRAPH_OFFSET)
 
 long MIC_SAMPLERATE = 16000;
 //int32_t mnMicVal    =     0;
@@ -378,12 +273,6 @@ unsigned long mnLastMicRead = 0;
 short mCurrentMicDisplay[FFT_BINCOUNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 short mTargetMicDisplay[FFT_BINCOUNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
-//float mfMagnetX, mfMagnetY, mfMagnetz;
-
-//if this cutoff is not working, either change where your speaker sits in the shell or add another magnet to your door to force the z-drop
-//int mnLastMagnetValue = 0;
-
-//Adafruit_MLX90640 oThermalCamera;
 const uint8_t mbCameraAddress = 0x33;
 
 #define TA_SHIFT 8
@@ -493,7 +382,7 @@ void setup()
   pinMode(SCAN_LED_PIN_4, OUTPUT);
 
   //set output for board non-neopixel LEDs
-  pinMode(LED_RED,  OUTPUT);
+  //pinMode(LED_RED,  OUTPUT); //overlaps with button input
   pinMode(LED_BLUE, OUTPUT);
 
   pinMode(TFT_BACKLIGHT, OUTPUT);
@@ -576,23 +465,6 @@ void setup()
 
       //start at 1hz
       MLX90640_SetRefreshRate(mbCameraAddress, 0x01);
-      //oThermalCamera.setMode(MLX90640_CHESS);
-      //oThermalCamera.setResolution(MLX90640_ADC_16BIT);
-      //minimize refresh rate since we can't turn off the camera?
-      //refresh rate will be double viable display frame rate, as need 2 data pulls per frame
-      //1Hz refresh rate works when clock is at 100kHz
-      //oThermalCamera.setRefreshRate(MLX90640_1_HZ);
-      //4Hz refresh rate works when clock is at 400kHz - 2fps
-      //oThermalCamera.setRefreshRate(MLX90640_4_HZ);
-      //Wire.setClock(1000000); // max 1 MHz gets translated to 400kHz with adafruit "driver"
-      //TWIM_FREQUENCY_FREQUENCY_K100 is default for board?
-      //TWIM_FREQUENCY_FREQUENCY_K250
-      //TWIM_FREQUENCY_FREQUENCY_K400
-      //8fps for screen is viable if clock speed is 800kHz & camera refresh rate is 16hz
-      //need to modify wire_nrf52.cpp to support
-      //TWIM_FREQUENCY_FREQUENCY_K1000
-      ////Wire.setClock(TWIM_FREQUENCY_FREQUENCY_K400);
-      //Wire.endTransmission(MLX90640_I2CADDR_DEFAULT);
     }
     ResetWireClock();
   }
@@ -1212,11 +1084,11 @@ void RunBoardLEDs()
     
     if (mbBoardRedLED) 
     {
-      digitalWrite(LED_RED, HIGH);
+      //digitalWrite(LED_RED, HIGH);
     } 
     else 
     {
-      digitalWrite(LED_RED, LOW);
+      //digitalWrite(LED_RED, LOW);
     }
   }
   
@@ -2100,7 +1972,6 @@ void display_micrphone_screen()
   //tft.drawFastHLine(123, 61, 30, color_SWOOP);
   //break these into 3 each to avoid a redundant black vline call
   //tft.drawFastHLine(24, 63, 296, color_SWOOP);
-  //97,99,98
   tft.drawFastHLine(24, 63, 96, color_SWOOP);
   tft.drawFastHLine(123, 63, 97, color_SWOOP);
   tft.drawFastHLine(223, 63, 97, color_SWOOP);
@@ -2323,11 +2194,7 @@ void display_hidden_thermal_screen()
   }
   else
   {
-
-    //Wire.beginTransmission(MLX90640_I2CADDR_DEFAULT);
-
     //camera data refresh rate needs to be twice as high as expected display frame rate
-    //oThermalCamera.setRefreshRate(MLX90640_4_HZ);
     SetThermalClock();
     MLX90640_SetRefreshRate(mbCameraAddress, 0x04);
 

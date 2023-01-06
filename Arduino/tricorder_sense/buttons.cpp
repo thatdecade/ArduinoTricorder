@@ -6,12 +6,7 @@
  */
 
 #include "buttons.h"
-
-
-#define GEO_BUTTON_1_PIN        (11) // GEO
-#define MET_BUTTON_2_PIN        (12) // MET
-#define BIO_BUTTON_3_PIN        (13) // BIO
-#define CAM_BUTTON_BOARD        (PIN_BUTTON1)  // PIN_BUTTON1 - CAMERA / Board Button
+#include "pinmap.h" // go here to set your own pin definitions
 
 byte pinMap_buttons[NUMBER_OF_BUTTONS] =
 {
